@@ -1,0 +1,37 @@
+[
+  {
+    "id": "clist_1752679201990_u4c8s6hqm",
+    "name": "Cue List 1",
+    "cues": [
+      {
+        "id": "cue_1752681275629_e8bnhwrjr",
+        "name": "Cena 1",
+        "fade_in": 6,
+        "delay_in": 6,
+        "values": [
+          {
+            "fixtureId": "fixture_abc123",
+            "attribute": "dimmer",
+            "value": 255
+          }
+        ],
+        "midi_actions": []
+      },
+      {
+        "id": "cue_1752682555602_7guxn53ro",
+        "name": "Czech",
+        "fade_in": 0.4,
+        "delay_in": 0.4,
+        "values": [
+          {
+            "fixtureId": "fixture_abc123",
+            "attribute": "dimmer",
+            "value": 111
+          }
+        ],
+        "midi_actions": []
+      }
+    ],
+    "fade_out_time": 1
+  }
+]
