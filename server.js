@@ -1,45 +1,114 @@
-// server.js na pasta mesa-de-luz-engine
+// mesa-de-luz-engine/server.js - Com Debugging
 
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const DMX = require('dmx'); // Importa a biblioteca DMX
-const dmx = new DMX(); // Cria uma nova instância do DMX
-const midi = require('midi'); // Importa a biblioteca MIDI
-const patch = require('./src/modules/patch'); // Importa o módulo de patch
-const personality = require('./src/modules/personality'); // Importa o módulo de personalidade
-const preset = require('./src/modules/preset'); // Importa o módulo de preset
-const cuelist = require('./src/modules/cuelist'); // Importa o módulo de cuelist
-const playback = require('./src/modules/playback'); // NOVO: Importa o módulo playback (substitui o executor para cuelists)
+const DMX = require('dmx');
+const dmx = new DMX();
+const midi = require('midi');
+const cors = require('cors');
 
+// Importar módulos
+const patch = require('./src/modules/patch');
+const personality = require('./src/modules/personality');
+const preset = require('./src/modules/preset');
+const cuelist = require('./src/modules/cuelist');
+const playback = require('./src/modules/playback');
+const effectsEngine = require('./src/modules/effects-engine');
+const executorModule = require('./src/modules/executor');
+const midiMappingModule = require('./src/modules/midi-mapping');
+const programmerModule = require('./src/modules/programmer');
 
 const app = express();
 const server = http.createServer(app);
+
+// Configurar CORS para permitir conexão do frontend React
+app.use(cors({
+    origin: 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
+
 const io = new Server(server, {
-  cors: {
-    origin: "*", // Permitir todas as origens para desenvolvimento. CUIDADO em produção!
-    methods: ["GET", "POST"]
-  }
+    cors: {
+        origin: 'http://localhost:3000',
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
 });
 
-const PORT = process.env.PORT || 3001; // Usar a porta 3001 para o backend
+const PORT = process.env.PORT || 3001;
 
-// --- Configuração da Porta DMX ---
 let universe = null;
-const DMX_PORT = 'COM5'; // Certifique-se de que esta é a porta COM correta para o seu Enttec
+const DMX_PORT = 'COM5';
 const DMX_DRIVER = 'enttec-usb-dmx-pro';
 
-// NOVO: Armazena o estado atual de todos os 512 canais DMX.
-// Será a "fonte da verdade" dos valores que queremos que o universo DMX tenha.
 const currentDmxState = {};
 for (let i = 1; i <= 512; i++) {
-    currentDmxState[i] = 0; // Inicializa todos os canais a 0
+    currentDmxState[i] = 0;
 }
 
-// NOVO: Armazena as transições de fade ativas.
-// { channel: { startValue, targetValue, startTime, fadeTimeMs } }
 const activeFades = new Map();
-const FADE_UPDATE_INTERVAL = 20; // Intervalo em ms para atualizar os valores de fade (20ms = 50 atualizações/segundo)
+const FADE_UPDATE_INTERVAL = 20; // ms
+
+// --- Função Centralizada para Enviar Comandos DMX com Fade ---
+function sendDmxCommandToUniverse(channel, value, fadeTime = 0.0) {
+    if (!universe) {
+        console.warn(`DMX Universe não está configurado. Não é possível enviar comando para o canal ${channel}.`);
+        io.emit('server_message', `Erro DMX: Universo não configurado.`);
+        return;
+    }
+
+    if (isNaN(channel) || channel < 1 || channel > 512) {
+        console.error(`Erro: Canal DMX ${channel} fora do range válido (1-512).`);
+        io.emit('server_message', `Erro DMX: Canal ${channel} inválido.`);
+        return;
+    }
+    if (isNaN(value) || value < 0 || value > 255) {
+        console.error(`Erro: Valor DMX ${value} fora do range válido (0-255) para o canal ${channel}.`);
+        io.emit('server_message', `Erro DMX: Valor ${value} inválido para canal ${channel}.`);
+        return;
+    }
+    if (isNaN(fadeTime) || fadeTime < 0 || fadeTime > 999.9) {
+        console.error(`Erro: Fade time ${fadeTime} fora do range válido (0-999.9s) para o canal ${channel}.`);
+        io.emit('server_message', `Erro DMX: Fade time ${fadeTime} inválido para canal ${channel}.`);
+        return;
+    }
+
+    const startValue = currentDmxState[channel];
+    const endValue = value;
+    const fadeTimeMs = fadeTime * 1000;
+
+    if (activeFades.has(channel)) {
+        activeFades.delete(channel);
+    }
+
+    if (fadeTimeMs === 0) {
+        currentDmxState[channel] = endValue;
+        universe.update({ [channel]: endValue });
+        io.emit('dmx_state_updated', currentDmxState);
+    } else {
+        activeFades.set(channel, {
+            startValue: startValue,
+            targetValue: endValue,
+            startTime: Date.now(),
+            fadeTimeMs: fadeTimeMs
+        });
+    }
+}
+
+function clearDmxUniverse() {
+    if (universe) {
+        universe.updateAll(0);
+        for (let i = 1; i <= 512; i++) {
+            currentDmxState[i] = 0;
+        }
+        io.emit('dmx_state_updated', currentDmxState);
+        console.log('Todos os canais DMX zerados.');
+    } else {
+        console.warn('Não foi possível zerar o universo DMX: Universo não configurado.');
+    }
+}
 
 try {
     console.log(`DMX: Tentando inicializar com driver '${DMX_DRIVER}' na porta '${DMX_PORT}'...`);
@@ -50,29 +119,27 @@ try {
         universe = tempUniverse;
         console.log(`DMX: Conexão bem-sucedida ao Enttec DMX USB PRO.`);
         console.log(`DMX: Universo 'my-universe' adicionado com sucesso, usando driver '${DMX_DRIVER}' na porta ${universe.dev.path}.`);
-        // Garante que todos os canais estão a 0 no início
         universe.updateAll(0);
     } else {
         console.error(`ERRO DMX: dmx.addUniverse retornou um objeto universo inválido para driver '${DMX_DRIVER}' na porta '${DMX_PORT}'.`);
         console.error('Isso indica que o dispositivo Enttec não foi encontrado ou não pôde ser aberto, mesmo que o objeto tenha sido criado.');
         console.log('Tentando adicionar universo DMX virtual para desenvolvimento (sem hardware físico)...');
-        universe = dmx.addUniverse('my-universe', 'null'); // Fallback para universo virtual
+        universe = dmx.addUniverse('my-universe', 'null');
         console.log('Universo DMX virtual adicionado para teste.');
     }
 } catch (error) {
     console.error('ERRO DMX CRÍTICO: Exceção capturada ao tentar adicionar universo DMX com hardware:', error);
     console.error('Verifique a conexão do Enttec, drivers e se a porta COM está correta e não está em uso por outro software.');
     console.log('Tentando adicionar universo DMX virtual para desenvolvimento (devido a erro grave)...');
-    universe = dmx.addUniverse('my-universe', 'null'); // Fallback para universo virtual em caso de exceção
+    universe = dmx.addUniverse('my-universe', 'null');
     console.log('Universo DMX virtual adicionado para teste.');
 }
 
-// NOVO: Loop principal para processar todos os fades ativos
 setInterval(() => {
-    if (!universe) return; // Não faz nada se o universo DMX não estiver inicializado
+    if (!universe) return;
 
     const now = Date.now();
-    let changesToApply = {}; // Objeto para acumular as mudanças a enviar para o universo.update()
+    let changesToApply = {};
 
     activeFades.forEach((fadeInfo, channel) => {
         const { startValue, targetValue, startTime, fadeTimeMs } = fadeInfo;
@@ -80,33 +147,29 @@ setInterval(() => {
         const elapsedTime = now - startTime;
 
         if (elapsedTime >= fadeTimeMs) {
-            // Fade concluído
             currentDmxState[channel] = targetValue;
-            changesToApply[channel] = targetValue; // Adiciona ao objeto de mudanças
-            activeFades.delete(channel); // Remove o fade da lista
+            changesToApply[channel] = targetValue;
+            activeFades.delete(channel);
         } else {
-            // Calcular o valor interpolado
             const progress = elapsedTime / fadeTimeMs;
             const newValue = Math.round(startValue + (targetValue - startValue) * progress);
 
-            // Apenas atualiza se o valor mudou para evitar atualizações DMX desnecessárias
             if (currentDmxState[channel] !== newValue) {
                 currentDmxState[channel] = newValue;
-                changesToApply[channel] = newValue; // Adiciona ao objeto de mudanças
+                changesToApply[channel] = newValue;
             }
         }
     });
 
-    // Envia as atualizações para o universo DMX físico apenas se houver mudanças
     if (Object.keys(changesToApply).length > 0) {
         universe.update(changesToApply);
-        // Opcional: emitir 'dmx_state_updated' aqui se quiser que o frontend veja cada passo do fade
-        // io.emit('dmx_state_updated', currentDmxState);
+        io.emit('dmx_state_updated', currentDmxState);
     }
 }, FADE_UPDATE_INTERVAL);
 
 
 // --- Configuração da Porta MIDI ---
+const input = new midi.Input();
 const output = new midi.Output();
 let midiPortOpen = false;
 try {
@@ -120,6 +183,10 @@ try {
             midiBridgePortId = i;
             break;
         }
+        if (midiBridgePortId === -1 && i === 0 && portCount > 0) {
+            midiBridgePortId = i;
+            break;
+        }
     }
 
     if (midiBridgePortId !== -1) {
@@ -127,475 +194,673 @@ try {
         midiPortOpen = true;
         console.log(`Porta MIDI '${output.getPortName(midiBridgePortId)}' aberta com sucesso.`);
     } else {
-        console.warn('Porta MIDI "MIDI Bridge" não encontrada. Testes MIDI podem não funcionar sem ela.');
+        console.warn('Porta MIDI "MIDI Bridge" não encontrada e nenhuma outra porta foi aberta. Testes MIDI podem não funcionar.');
     }
+
+    if (input.getPortCount() > 0) {
+        input.openPort(0);
+        input.on('message', (deltaTime, message) => {
+            console.log(`MIDI: Recebido: ${message} (delta: ${deltaTime})`);
+            io.emit('midi_message_received', { deltaTime, message });
+
+            const status = message[0];
+            const data1 = message[1];
+            let data2 = message[2];
+
+            const midiChannel = (status & 0x0F) + 1;
+            const messageType = status & 0xF0;
+
+            let processed = false; // Flag para indicar se a mensagem foi processada por um mapeamento
+
+            if (messageType === 0xB0) { // Control Change (CC)
+                // Tentar encontrar mapeamento de encoder relativo para EXECUTOR
+                const encoderExecutorMapping = midiMappingModule.findMidiMapping('encoder_relative', midiChannel, data1, 'executor');
+                if (encoderExecutorMapping && (data2 === encoderExecutorMapping.incrementValue || data2 === encoderExecutorMapping.decrementValue)) {
+                    console.log(`MIDI: Mapeamento ENCODER (Executor) encontrado para CC ${data1} Canal ${midiChannel}.`);
+                    let newFaderValue;
+                    const currentExecutor = executorModule.getAllExecutors().find(exec => exec.id === encoderExecutorMapping.executorId);
+
+                    if (currentExecutor) {
+                        let currentVal = currentExecutor.faderValue;
+                        if (data2 === encoderExecutorMapping.incrementValue) {
+                            newFaderValue = currentVal + encoderExecutorMapping.stepSize;
+                        } else if (data2 === encoderExecutorMapping.decrementValue) {
+                            newFaderValue = currentVal - encoderExecutorMapping.stepSize;
+                        } else {
+                            return; // Ignorar outros valores do encoder (como o '0' de reset)
+                        }
+                        newFaderValue = Math.max(0, Math.min(255, newFaderValue));
+                        executorModule.updateExecutorFaderFromMidi(encoderExecutorMapping.executorId, newFaderValue);
+                        io.emit('executors_updated', executorModule.getAllExecutors());
+                        processed = true;
+                    }
+                }
+
+                // Se não foi processado como encoder de executor, tentar como encoder de PROGRAMADOR
+                if (!processed) {
+                    const encoderProgrammerMapping = midiMappingModule.findMidiMapping('encoder_relative', midiChannel, data1, 'programmer');
+                    if (encoderProgrammerMapping && (data2 === encoderProgrammerMapping.incrementValue || data2 === encoderProgrammerMapping.decrementValue)) {
+                        console.log(`MIDI: Mapeamento ENCODER (Programador) encontrado para CC ${data1} Canal ${midiChannel}.`);
+                        const fixture = patch.getFixtureById(encoderProgrammerMapping.fixtureId);
+                        const personality = personality.getPersonalityById(fixture ? fixture.personalityId : null);
+
+                        if (fixture && personality) {
+                            const attributeInfo = personality.attributes.find(attr => attr.name === encoderProgrammerMapping.attributeName);
+                            if (attributeInfo) {
+                                const currentProgrammerValue = programmerModule.getProgrammerValue(fixture.id, attributeInfo.name);
+                                let newProgrammerValue;
+
+                                if (data2 === encoderProgrammerMapping.incrementValue) {
+                                    newProgrammerValue = currentProgrammerValue + encoderProgrammerMapping.stepSize;
+                                } else if (data2 === encoderProgrammerMapping.decrementValue) {
+                                    newProgrammerValue = currentProgrammerValue - encoderProgrammerMapping.stepSize;
+                                } else {
+                                    return; // Ignorar outros valores do encoder
+                                }
+
+                                newProgrammerValue = Math.max(0, Math.min(255, newProgrammerValue));
+                                console.log(`MIDI: Chamando programmerModule.updateProgrammerValue para Fixture: ${fixture.name}, Atributo: ${attributeInfo.name}, Valor: ${newProgrammerValue}`);
+                                programmerModule.updateProgrammerValue(fixture.id, attributeInfo.name, newProgrammerValue);
+                                processed = true;
+                            } else {
+                                console.warn(`MIDI: Atributo '${encoderProgrammerMapping.attributeName}' não encontrado na personalidade para o mapeamento de encoder do programador.`);
+                            }
+                        } else {
+                            console.warn(`MIDI: Fixture ou Personalidade não encontrados para o mapeamento de encoder do programador.`);
+                        }
+                    }
+                }
+
+                // Se não foi processado como encoder, tentar como CC ABSOLUTO (Executor ou Programador)
+                if (!processed) {
+                    const absoluteExecutorMapping = midiMappingModule.findMidiMapping('cc', midiChannel, data1, 'executor');
+                    if (absoluteExecutorMapping) {
+                        console.log(`MIDI: Mapeamento ABSOLUTO (Executor) encontrado para CC ${data1} Canal ${midiChannel}.`);
+                        const mappedValue = Math.round(
+                            absoluteExecutorMapping.targetMin +
+                            ((data2 - absoluteExecutorMapping.minValue) / (absoluteExecutorMapping.maxValue - absoluteExecutorMapping.minValue)) *
+                            (absoluteExecutorMapping.targetMax - absoluteExecutorMapping.targetMin)
+                        );
+                        const finalDmxValue = Math.max(0, Math.min(255, mappedValue));
+                        executorModule.updateExecutorFaderFromMidi(absoluteExecutorMapping.executorId, finalDmxValue);
+                        io.emit('executors_updated', executorModule.getAllExecutors());
+                        processed = true;
+                    }
+                }
+
+                if (!processed) {
+                    const absoluteProgrammerMapping = midiMappingModule.findMidiMapping('cc', midiChannel, data1, 'programmer');
+                    if (absoluteProgrammerMapping) {
+                        console.log(`MIDI: Mapeamento ABSOLUTO (Programador) encontrado para CC ${data1} Canal ${midiChannel}.`);
+                        const mappedValue = Math.round(
+                            absoluteProgrammerMapping.targetMin +
+                            ((data2 - absoluteProgrammerMapping.minValue) / (absoluteProgrammerMapping.maxValue - absoluteProgrammerMapping.minValue)) *
+                            (absoluteProgrammerMapping.targetMax - absoluteProgrammerMapping.targetMin)
+                        );
+                        const finalDmxValue = Math.max(0, Math.min(255, mappedValue));
+                        console.log(`MIDI: Chamando programmerModule.updateProgrammerValue para Fixture: ${absoluteProgrammerMapping.fixtureId}, Atributo: ${absoluteProgrammerMapping.attributeName}, Valor: ${finalDmxValue}`);
+                        programmerModule.updateProgrammerValue(absoluteProgrammerMapping.fixtureId, absoluteProgrammerMapping.attributeName, finalDmxValue);
+                        processed = true;
+                    }
+                }
+
+            } else if (messageType === 0x90 || messageType === 0x80) { // Note On / Note Off
+                // Para simplificar, Note Off (0x80) também será tratado, forçando data2 a 0
+                if (messageType === 0x80) data2 = 0;
+
+                // Tentar encontrar mapeamento de Note para EXECUTOR
+                const noteExecutorMapping = midiMappingModule.findMidiMapping('note', midiChannel, data1, 'executor');
+                if (noteExecutorMapping) {
+                    console.log(`MIDI: Mapeamento NOTE (Executor) encontrado para Nota ${data1} Canal ${midiChannel}.`);
+                    const mappedValue = Math.round(
+                        noteExecutorMapping.targetMin +
+                        ((data2 - noteExecutorMapping.minValue) / (noteExecutorMapping.maxValue - noteExecutorMapping.minValue)) *
+                        (noteExecutorMapping.targetMax - noteExecutorMapping.targetMin)
+                    );
+                    const finalDmxValue = Math.max(0, Math.min(255, mappedValue));
+                    executorModule.updateExecutorFaderFromMidi(noteExecutorMapping.executorId, finalDmxValue);
+                    io.emit('executors_updated', executorModule.getAllExecutors());
+                    processed = true;
+                }
+
+                // Se não foi processado como Note de executor, tentar como Note de PROGRAMADOR
+                if (!processed) {
+                    const noteProgrammerMapping = midiMappingModule.findMidiMapping('note', midiChannel, data1, 'programmer');
+                    if (noteProgrammerMapping) {
+                        console.log(`MIDI: Mapeamento NOTE (Programador) encontrado para Nota ${data1} Canal ${midiChannel}.`);
+                        const mappedValue = Math.round(
+                            noteProgrammerMapping.targetMin +
+                            ((data2 - noteProgrammerMapping.minValue) / (noteProgrammerMapping.maxValue - noteProgrammerMapping.minValue)) *
+                            (noteProgrammerMapping.targetMax - noteProgrammerMapping.targetMin)
+                        );
+                        const finalDmxValue = Math.max(0, Math.min(255, mappedValue));
+                        console.log(`MIDI: Chamando programmerModule.updateProgrammerValue para Fixture: ${noteProgrammerMapping.fixtureId}, Atributo: ${noteProgrammerMapping.attributeName}, Valor: ${finalDmxValue}`);
+                        programmerModule.updateProgrammerValue(noteProgrammerMapping.fixtureId, noteProgrammerMapping.attributeName, finalDmxValue);
+                        processed = true;
+                    }
+                }
+            }
+
+            if (!processed) {
+                console.log(`MIDI: Nenhuma ação para mensagem MIDI: Tipo ${messageType}, Canal ${midiChannel}, Controlo ${data1}, Valor ${data2}.`);
+            }
+        });
+        console.log(`MIDI: Porta de entrada MIDI '${input.getPortName(0)}' aberta.`);
+        io.emit('server_message', `MIDI: Porta de entrada aberta: ${input.getPortName(0)}.`);
+    } else {
+        console.warn('MIDI: Nenhuma porta de entrada MIDI encontrada.');
+        io.emit('server_message', `MIDI: Nenhuma porta de entrada encontrada.`);
+    }
+
 } catch (error) {
     console.error('Erro ao abrir porta MIDI:', error.message);
 }
 
 
-// --- Rota de teste simples para o Express ---
 app.get('/', (req, res) => {
-  res.send('Servidor do Engine/Core está a correr!');
+    res.send('Servidor do Engine/Core está a correr!');
 });
 
-// --- Eventos do Socket.io ---
 io.on('connection', (socket) => {
-  console.log('Um cliente conectou-se ao Socket.io:', socket.id);
-  socket.emit('server_message', `Bem-vindo, cliente ${socket.id}! Conectado ao Engine/Core.`);
+    console.log('Um cliente conectou-se ao Socket.io:', socket.id);
+    socket.emit('server_message', `Bem-vindo, cliente ${socket.id}! Conectado ao Engine/Core.`);
 
-  // Envia o estado DMX atual para o cliente recém-conectado
-  socket.emit('dmx_state_updated', currentDmxState);
+    socket.emit('fixtures_updated', patch.getAllFixtures());
+    socket.emit('personalities_updated', personality.getAllPersonalities());
+    socket.emit('presets_updated', preset.getAllPresets());
+    socket.emit('cuelists_updated', cuelist.getAllCuelists());
+    socket.emit('executors_updated', executorModule.getAllExecutors());
+    socket.emit('dmx_state_updated', currentDmxState);
+    socket.emit('playback_status_updated', playback.getPlaybackStatus());
+    socket.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+    socket.emit('midi_mappings_updated', midiMappingModule.getAllMidiMappings());
 
-  socket.on('disconnect', () => {
-    console.log('Cliente desconectou-se do Socket.io:', socket.id);
-  });
+    socket.on('dmx_command', (data) => {
+        sendDmxCommandToUniverse(data.channel, data.value, data.fadeTime);
+    });
 
-  socket.on('dmx_command', (data) => {
-    console.log('Comando DMX recebido via WebSocket:', data);
-    if (universe && data && typeof data.channel === 'number' && typeof data.value === 'number') {
-      const channel = parseInt(data.channel);
-      const value = parseInt(data.value);
-      const fadeTime = parseFloat(data.fadeTime) || 0; // Tempo de fade em segundos, default 0
-
-      // Validações básicas (conforme protocolo)
-      if (isNaN(channel) || channel < 1 || channel > 512) {
-          console.warn(`DMX: Canal inválido recebido: ${data.channel}`);
-          socket.emit('server_message', `Erro: Canal DMX inválido: ${data.channel}`);
-          return;
-      }
-      if (isNaN(value) || value < 0 || value > 255) {
-          console.warn(`DMX: Valor DMX inválido recebido: ${data.value}`);
-          socket.emit('server_message', `Erro: Valor DMX inválido: ${data.value}`);
-          return;
-      }
-      if (isNaN(fadeTime) || fadeTime < 0 || fadeTime > 999.9) { // Ajustado para 999.9s conforme protocolo
-          console.warn(`DMX: Fade time inválido recebido: ${data.fadeTime}`);
-          socket.emit('server_message', `Erro: Fade time inválido: ${data.fadeTime}`);
-          return;
-      }
-
-      if (fadeTime > 0) {
-        // Iniciar um fade suave
-        const fadeTimeMs = fadeTime * 1000; // Converter segundos para milissegundos
-        activeFades.set(channel, {
-            startValue: currentDmxState[channel], // Pega o valor DMX atual do estado
-            targetValue: value,
-            startTime: Date.now(),
-            fadeTimeMs: fadeTimeMs
+    socket.on('apply_dmx_commands', (commands) => {
+        console.log(`Server: Recebido 'apply_dmx_commands' com ${commands.length} comandos.`);
+        io.emit('server_message', `Server: Aplicando preset com ${commands.length} comandos DMX.`);
+        commands.forEach(cmd => {
+            sendDmxCommandToUniverse(cmd.channel, cmd.value, cmd.fadeTime || 0.0);
         });
-        console.log(`DMX: Canal ${channel} a fazer fade para ${value} em ${fadeTime}s`);
-        socket.emit('server_message', `DMX: Canal ${channel} a fazer fade para ${value} em ${fadeTime}s`);
-      } else {
-        // Define o valor instantaneamente
-        currentDmxState[channel] = value; // Atualiza o estado DMX interno
-        const dmxData = {};
-        dmxData[channel] = value;
-        universe.update(dmxData); // Atualiza os valores DMX do universo
-        activeFades.delete(channel); // Remove qualquer fade ativo para este canal
-        console.log(`DMX: Canal ${channel} definido instantaneamente para ${value}`);
-        socket.emit('server_message', `DMX: Canal ${channel} definido instantaneamente para ${value}`);
-      }
-      // Notifica todos os clientes sobre a mudança no estado DMX (apenas no final do fade para simplificar,
-      // ou pode emitir no loop do setInterval se precisar de feedback mais granular)
-      io.emit('dmx_state_updated', currentDmxState);
-    } else {
-        console.warn('Comando DMX inválido recebido:', data);
-        socket.emit('server_message', `Erro: Comando DMX inválido.`);
-    }
-  });
+    });
 
-  socket.on('midi_command', (data) => {
-    console.log('Comando MIDI recebido via WebSocket:', data);
-    if (midiPortOpen && data && data.message && Array.isArray(data.message)) {
-        output.sendMessage(data.message);
-        console.log(`MIDI: Mensagem enviada: ${data.message}`);
-    } else {
-        console.warn('Comando MIDI inválido recebido:', data);
-    }
-  });
+    socket.on('create_fixture', (fixtureData) => {
+        try {
+            const newFixture = patch.createFixture(fixtureData);
+            io.emit('fixtures_updated', patch.getAllFixtures());
+            io.emit('server_message', `Fixture '${newFixture.name}' criado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao criar fixture:', error.message);
+            io.emit('server_message', `Erro ao criar fixture: ${error.message}`);
+        }
+    });
 
-  // --- Novos Listeners para Módulo de Patch ---
-  socket.emit('fixtures_updated', patch.getAllFixtures()); // Envia a lista inicial de fixtures
+    socket.on('update_fixture', (data) => {
+        try {
+            const updatedFixture = patch.updateFixture(data.id, data.updates);
+            io.emit('fixtures_updated', patch.getAllFixtures());
+            io.emit('server_message', `Fixture '${updatedFixture.name}' atualizado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar fixture:', error.message);
+            io.emit('server_message', `Erro ao atualizar fixture: ${error.message}`);
+        }
+    });
 
-  socket.on('create_fixture', (fixtureData) => {
-    try {
-      const newFixture = patch.createFixture(fixtureData);
-      io.emit('fixtures_updated', patch.getAllFixtures());
-      socket.emit('server_message', `Fixture '${newFixture.name}' criado com sucesso!`);
-      console.log(`Server: Fixture '${newFixture.name}' (${newFixture.id}) criado.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao criar fixture: ${error.message}`);
-      console.error('Server: Erro ao criar fixture:', error.message);
-    }
-  });
+    socket.on('delete_fixture', (id) => {
+        try {
+            const success = patch.deleteFixture(id);
+            if (success) {
+                io.emit('fixtures_updated', patch.getAllFixtures());
+                io.emit('server_message', `Fixture '${id}' removido com sucesso.`);
+            } else {
+                io.emit('server_message', `Fixture '${id}' não encontrado para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover fixture:', error.message);
+            io.emit('server_message', `Erro ao remover fixture: ${error.message}`);
+        }
+    });
 
-  socket.on('update_fixture', ({ id, updates }) => {
-    try {
-      const updatedFixture = patch.updateFixture(id, updates);
-      io.emit('fixtures_updated', patch.getAllFixtures());
-      socket.emit('server_message', `Fixture '${updatedFixture.name}' atualizado com sucesso!`);
-      console.log(`Server: Fixture '${updatedFixture.name}' (${updatedFixture.id}) atualizado.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao atualizar fixture ${id}: ${error.message}`);
-      console.error(`Server: Erro ao atualizar fixture ${id}:`, error.message);
-    }
-  });
+    socket.on('create_personality', (personalityData) => {
+        try {
+            const newPersonality = personality.createPersonality(personalityData);
+            io.emit('personalities_updated', personality.getAllPersonalities());
+            io.emit('server_message', `Personalidade '${newPersonality.name}' criada com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao criar personalidade:', error.message);
+            io.emit('server_message', `Erro ao criar personalidade: ${error.message}`);
+        }
+    });
 
-  socket.on('delete_fixture', (id) => {
-    try {
-      const success = patch.deleteFixture(id);
-      if (success) {
-        io.emit('fixtures_updated', patch.getAllFixtures());
-        socket.emit('server_message', `Fixture ${id} removido com sucesso.`);
-        console.log(`Server: Fixture ${id} removido.`);
-      } else {
-        socket.emit('server_message', `Erro: Fixture ${id} não encontrado para remover.`);
-        console.warn(`Server: Fixture ${id} não encontrado para remover.`);
-      }
-    } catch (error) {
-      socket.emit('server_message', `Erro ao remover fixture ${id}: ${error.message}`);
-      console.error(`Server: Erro ao remover fixture ${id}:`, error.message);
-    }
-  });
+    socket.on('update_personality', (data) => {
+        try {
+            const updatedPersonality = personality.updatePersonality(data.id, data.updates);
+            io.emit('personalities_updated', personality.getAllPersonalities());
+            io.emit('server_message', `Personalidade '${updatedPersonality.name}' atualizada com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar personalidade:', error.message);
+            io.emit('server_message', `Erro ao atualizar personalidade: ${error.message}`);
+        }
+    });
 
-  // --- Novos Listeners para Módulo de Personalidade ---
-  socket.emit('personalities_updated', personality.getAllPersonalities());
+    socket.on('delete_personality', (id) => {
+        try {
+            const success = personality.deletePersonality(id);
+            if (success) {
+                io.emit('personalities_updated', personality.getAllPersonalities());
+                io.emit('server_message', `Personalidade '${id}' removida com sucesso.`);
+            } else {
+                io.emit('server_message', `Personalidade '${id}' não encontrada para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover personalidade:', error.message);
+            io.emit('server_message', `Erro ao remover personalidade: ${error.message}`);
+        }
+    });
 
-  socket.on('create_personality', (personalityData) => {
-    try {
-      const newPersonality = personality.createPersonality(personalityData);
-      io.emit('personalities_updated', personality.getAllPersonalities());
-      socket.emit('server_message', `Personalidade '${newPersonality.name}' criada com sucesso!`);
-      console.log(`Server: Personalidade '${newPersonality.name}' (${newPersonality.id}) criada.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao criar personalidade: ${error.message}`);
-      console.error('Server: Erro ao criar personalidade:', error.message);
-    }
-  });
+    socket.on('create_preset', (presetData) => {
+        try {
+            const newPreset = preset.createPreset(presetData);
+            io.emit('presets_updated', preset.getAllPresets());
+            io.emit('server_message', `Preset '${newPreset.name}' criado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao criar preset:', error.message);
+            io.emit('server_message', `Erro ao criar preset: ${error.message}`);
+        }
+    });
 
-  socket.on('update_personality', ({ id, updates }) => {
-    try {
-      const updatedPersonality = personality.updatePersonality(id, updates);
-      io.emit('personalities_updated', personality.getAllPersonalities());
-      socket.emit('server_message', `Personalidade '${updatedPersonality.name}' atualizada com sucesso!`);
-      console.log(`Server: Personalidade '${updatedPersonality.name}' (${updatedPersonality.id}) atualizada.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao atualizar personalidade ${id}: ${error.message}`);
-      console.error(`Server: Erro ao atualizar personalidade ${id}:`, error.message);
-    }
-  });
+    socket.on('update_preset', (data) => {
+        try {
+            const updatedPreset = preset.updatePreset(data.id, data.updates);
+            io.emit('presets_updated', preset.getAllPresets());
+            io.emit('server_message', `Preset '${updatedPreset.name}' atualizado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar preset:', error.message);
+            io.emit('server_message', `Erro ao atualizar preset: ${error.message}`);
+        }
+    });
 
-  socket.on('delete_personality', (id) => {
-    try {
-      const success = personality.deletePersonality(id);
-      if (success) {
-        io.emit('personalities_updated', personality.getAllPersonalities());
-        socket.emit('server_message', `Personalidade ${id} removida com sucesso.`);
-        console.log(`Server: Personalidade ${id} removida.`);
-      } else {
-        socket.emit('server_message', `Erro: Personalidade ${id} não encontrada para remover.`);
-        console.warn(`Server: Personalidade ${id} não encontrada para remover.`);
-      }
-    } catch (error) {
-      socket.emit('server_message', `Erro ao remover personalidade ${id}: ${error.message}`);
-      console.error(`Server: Erro ao remover personalidade ${id}:`, error.message);
-    }
-  });
+    socket.on('delete_preset', (id) => {
+        try {
+            const success = preset.deletePreset(id);
+            if (success) {
+                io.emit('presets_updated', preset.getAllPresets());
+                io.emit('server_message', `Preset '${id}' removido com sucesso.`);
+            } else {
+                io.emit('server_message', `Preset '${id}' não encontrado para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover preset:', error.message);
+            io.emit('server_message', `Erro ao remover preset: ${error.message}`);
+        }
+    });
 
-  // --- Novos Listeners para Módulo de Preset ---
-  socket.emit('presets_updated', preset.getAllPresets());
+    socket.on('create_cuelist', (cuelistData) => {
+        try {
+            const newCuelist = cuelist.createCuelist(cuelistData);
+            io.emit('cuelists_updated', cuelist.getAllCuelists());
+            io.emit('server_message', `Cuelist '${newCuelist.name}' criada com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao criar cuelist:', error.message);
+            io.emit('server_message', `Erro ao criar cuelist: ${error.message}`);
+        }
+    });
 
-  socket.on('create_preset', (presetData) => {
-    try {
-      const newPreset = preset.createPreset(presetData);
-      io.emit('presets_updated', preset.getAllPresets());
-      socket.emit('server_message', `Preset '${newPreset.name}' criado com sucesso!`);
-      console.log(`Server: Preset '${newPreset.name}' (${newPreset.id}) criado.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao criar preset: ${error.message}`);
-      console.error('Server: Erro ao criar preset:', error.message);
-    }
-  });
+    socket.on('update_cuelist', (data) => {
+        try {
+            const updatedCuelist = cuelist.updateCuelist(data.id, data.updates);
+            io.emit('cuelists_updated', cuelist.getAllCuelists());
+            io.emit('server_message', `Cuelist '${updatedCuelist.name}' atualizada com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar cuelist:', error.message);
+            io.emit('server_message', `Erro ao atualizar cuelist: ${error.message}`);
+        }
+    });
 
-  socket.on('update_preset', ({ id, updates }) => {
-    try {
-      const updatedPreset = preset.updatePreset(id, updates);
-      io.emit('presets_updated', preset.getAllPresets());
-      socket.emit('server_message', `Preset '${updatedPreset.name}' atualizado com sucesso!`);
-      console.log(`Server: Preset '${updatedPreset.name}' (${updatedPreset.id}) atualizado.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao atualizar preset ${id}: ${error.message}`);
-      console.error(`Server: Erro ao atualizar preset ${id}:`, error.message);
-    }
-  });
+    socket.on('delete_cuelist', (id) => {
+        try {
+            const success = cuelist.deleteCuelist(id);
+            if (success) {
+                io.emit('cuelists_updated', cuelist.getAllCuelists());
+                io.emit('server_message', `Cuelist '${id}' removida com sucesso.`);
+            } else {
+                io.emit('server_message', `Cuelist '${id}' não encontrada para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover cuelist:', error.message);
+            io.emit('server_message', `Erro ao remover cuelist: ${error.message}`);
+        }
+    });
 
-  socket.on('delete_preset', (id) => {
-    try {
-      const success = preset.deletePreset(id);
-      if (success) {
-        io.emit('presets_updated', preset.getAllPresets());
-        socket.emit('server_message', `Preset ${id} removido com sucesso.`);
-        console.log(`Server: Preset ${id} removido.`);
-      } else {
-        socket.emit('server_message', `Erro: Preset ${id} não encontrado para remover.`);
-        console.warn(`Server: Preset ${id} não encontrado para remover.`);
-      }
-    } catch (error) {
-      socket.emit('server_message', `Erro ao remover preset ${id}: ${error.message}`);
-      console.error(`Server: Erro ao remover preset ${id}:`, error.message);
-    }
-  });
+    socket.on('add_cue_to_cuelist', (data) => {
+        try {
+            const updatedCuelist = cuelist.addCueToCuelist(data.cuelistId, data.cueData);
+            io.emit('cuelists_updated', cuelist.getAllCuelists());
+            io.emit('server_message', `Cue '${data.cueData.name}' adicionado à cuelist '${updatedCuelist.name}'.`);
+        } catch (error) {
+            console.error('Server: Erro ao adicionar cue à cuelist:', error.message);
+            io.emit('server_message', `Erro ao adicionar cue: ${error.message}`);
+        }
+    });
 
-  // --- Novos Listeners para Módulo de Cuelist e Cues ---
-  socket.emit('cuelists_updated', cuelist.getAllCuelists());
+    socket.on('update_cue_in_cuelist', (data) => {
+        try {
+            const updatedCue = cuelist.updateCueInCuelist(data.cuelistId, data.cueId, data.updates);
+            io.emit('cuelists_updated', cuelist.getAllCuelists());
+            io.emit('server_message', `Cue '${updatedCue.name}' na cuelist '${data.cuelistId}' atualizado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar cue na cuelist:', error.message);
+            io.emit('server_message', `Erro ao atualizar cue: ${error.message}`);
+        }
+    });
 
-  socket.on('create_cuelist', (cuelistData) => {
-    try {
-      const newCuelist = cuelist.createCuelist(cuelistData);
-      io.emit('cuelists_updated', cuelist.getAllCuelists());
-      socket.emit('server_message', `Cuelist '${newCuelist.name}' criada com sucesso!`);
-      console.log(`Server: Cuelist '${newCuelist.name}' (${newCuelist.id}) criada.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao criar cuelist: ${error.message}`);
-      console.error('Server: Erro ao criar cuelist:', error.message);
-    }
-  });
+    socket.on('delete_cue_from_cuelist', (data) => {
+        try {
+            const success = cuelist.deleteCueFromCuelist(data.cuelistId, data.cueId);
+            if (success) {
+                io.emit('cuelists_updated', cuelist.getAllCuelists());
+                io.emit('server_message', `Cue '${data.cueId}' removido da cuelist '${data.cuelistId}'.`);
+            } else {
+                io.emit('server_message', `Cue '${data.cueId}' não encontrado na cuelist '${data.cuelistId}' para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover cue da cuelist:', error.message);
+            io.emit('server_message', `Erro ao remover cue: ${error.message}`);
+        }
+    });
 
-  socket.on('update_cuelist', ({ id, updates }) => {
-    try {
-      const updatedCuelist = cuelist.updateCuelist(id, updates);
-      io.emit('cuelists_updated', cuelist.getAllCuelists());
-      socket.emit('server_message', `Cuelist '${updatedCuelist.name}' atualizada com sucesso!`);
-      console.log(`Server: Cuelist '${updatedCuelist.name}' (${updatedCuelist.id}) atualizada.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao atualizar cuelist ${id}: ${error.message}`);
-      console.error(`Server: Erro ao atualizar cuelist ${id}:`, error.message);
-    }
-  });
+    socket.on('start_playback', async (cuelistId, masterIntensity) => {
+        console.log(`Backend: start_playback event received.`);
+        console.log(`Backend: Received cuelistId:`, cuelistId, `(Type: ${typeof cuelistId})`);
+        console.log(`Backend: Received masterIntensity:`, masterIntensity, `(Type: ${typeof masterIntensity})`);
 
-  socket.on('delete_cuelist', (id) => {
-    try {
-      const success = cuelist.deleteCuelist(id);
-      if (success) {
-        io.emit('cuelists_updated', cuelist.getAllCuelists());
-        socket.emit('server_message', `Cuelist ${id} removida com sucesso.`);
-        console.log(`Server: Cuelist ${id} removida.`);
-      } else {
-        socket.emit('server_message', `Erro: Cuelist ${id} não encontrada para remover.`);
-        console.warn(`Server: Cuelist ${id} não encontrada para remover.`);
-      }
-    } catch (error) {
-      socket.emit('server_message', `Erro ao remover cuelist ${id}: ${error.message}`);
-      console.error(`Server: Erro ao remover cuelist ${id}:`, error.message);
-    }
-  });
+        let actualCuelistId = cuelistId;
+        if (typeof cuelistId === 'object' && cuelistId !== null && cuelistId.id) {
+            actualCuelistId = cuelistId.id;
+            console.warn(`Backend: cuelistId recebido como objeto. Usando cuelistId.id: ${actualCuelistId}`);
+        } else if (typeof cuelistId !== 'string') {
+            actualCuelistId = String(cuelistId);
+            console.warn(`Backend: cuelistId recebido não é string nem objeto com .id. Convertendo para string: ${actualCuelistId}`);
+        }
 
-  socket.on('add_cue_to_cuelist', ({ cuelistId, cueData }) => {
-    try {
-      const newCue = cuelist.addCueToCuelist(cuelistId, cueData);
-      io.emit('cuelists_updated', cuelist.getAllCuelists());
-      socket.emit('server_message', `Cue '${newCue.name}' adicionado à cuelist '${cuelistId}' com sucesso!`);
-      console.log(`Server: Cue '${newCue.name}' (${newCue.id}) adicionado à cuelist '${cuelistId}'.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao adicionar cue à cuelist ${cuelistId}: ${error.message}`);
-      console.error(`Server: Erro ao adicionar cue à cuelist ${cuelistId}:`, error.message);
-    }
-  });
+        try {
+            const selectedCuelist = cuelist.getCuelistById(actualCuelistId);
+            if (!selectedCuelist) {
+                throw new Error(`Cuelist com ID '${actualCuelistId}' não encontrada ou vazia. Não é possível iniciar o playback.`);
+            }
+            await playback.startPlayback(selectedCuelist.id, masterIntensity);
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'start_playback' para cuelist ${selectedCuelist.name} recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao iniciar playback:', error.message);
+            io.emit('server_message', `Erro ao iniciar playback: ${error.message}`);
+        }
+    });
 
-  socket.on('update_cue_in_cuelist', ({ cuelistId, cueId, updates }) => {
-    try {
-      const updatedCue = cuelist.updateCueInCuelist(cuelistId, cueId, updates);
-      io.emit('cuelists_updated', cuelist.getAllCuelists());
-      socket.emit('server_message', `Cue '${updatedCue.name}' na cuelist '${cuelistId}' atualizado com sucesso!`);
-      console.log(`Server: Cue '${updatedCue.name}' (${updatedCue.id}) na cuelist '${cuelistId}' atualizado.`);
-    } catch (error) {
-      socket.emit('server_message', `Erro ao atualizar cue ${cueId} na cuelist ${cuelistId}: ${error.message}`);
-      console.error(`Server: Erro ao atualizar cue ${cueId} na cuelist ${cuelistId}:`, error.message);
-    }
-  });
+    socket.on('pause_playback', () => {
+        try {
+            playback.pausePlayback();
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'pause_playback' recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao pausar playback:', error.message);
+            io.emit('server_message', `Erro ao pausar playback: ${error.message}`);
+        }
+    });
 
-  socket.on('delete_cue_from_cuelist', ({ cuelistId, cueId }) => {
-    try {
-      const success = cuelist.deleteCueFromCuelist(cuelistId, cueId);
-      if (success) {
-        io.emit('cuelists_updated', cuelist.getAllCuelists());
-        socket.emit('server_message', `Cue ${cueId} removido da cuelist ${cuelistId} com sucesso.`);
-        console.log(`Server: Cue ${cueId} removido da cuelist ${cuelistId}.`);
-      } else {
-        socket.emit('server_message', `Erro: Cue ${cueId} não encontrado na cuelist ${cuelistId} para remover.`);
-        console.warn(`Server: Cue ${cueId} não encontrado na cuelist ${cuelistId} para remover.`);
-      }
-    } catch (error) {
-      socket.emit('server_message', `Erro ao remover cue ${cueId} da cuelist ${cuelistId}: ${error.message}`);
-      console.error(`Server: Erro ao remover cue ${cueId} da cuelist ${cuelistId}:`, error.message);
-    }
-  });
+    socket.on('resume_playback', async () => {
+        try {
+            await playback.resumePlayback();
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'resume_playback' recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao retomar playback:', error.message);
+            io.emit('server_message', `Erro ao retomar playback: ${error.message}`);
+        }
+    });
 
-  // --- Novos Listeners para Módulo de Playback ---
-socket.on('start_playback', async (cuelistId) => {
-    try {
-        await playback.startPlayback(cuelistId);
-        io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-        socket.emit('server_message', `Comando 'start_playback' para cuelist ${cuelistId} recebido.`);
-    } catch (error) {
-        socket.emit('server_message', `Erro ao iniciar playback: ${error.message}`);
-        console.error('Server: Erro ao iniciar playback:', error.message);
-    }
+    socket.on('stop_playback', async () => {
+        try {
+            await playback.stopPlayback();
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'stop_playback' recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao parar playback:', error.message);
+            io.emit('server_message', `Erro ao parar playback: ${error.message}`);
+        }
+    });
+
+    socket.on('next_cue', async () => {
+        try {
+            await playback.nextCue();
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'next_cue' recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao avançar cue:', error.message);
+            io.emit('server_message', `Erro ao avançar cue: ${error.message}`);
+        }
+    });
+
+    socket.on('prev_cue', async () => {
+        try {
+            await playback.prevCue();
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Comando 'prev_cue' recebido.`);
+        } catch (error) {
+            console.error('Server: Erro ao retroceder cue:', error.message);
+            io.emit('server_message', `Erro ao retroceder cue: ${error.message}`);
+        }
+    });
+
+    socket.on('request_playback_status', () => {
+        socket.emit('playback_status_updated', playback.getPlaybackStatus());
+    });
+
+    socket.on('set_global_master_intensity', (intensity) => {
+        try {
+            playback.setGlobalMasterIntensity(intensity);
+            io.emit('playback_status_updated', playback.getPlaybackStatus());
+            socket.emit('server_message', `Intensidade Master Global definida para ${intensity}.`);
+        } catch (error) {
+            console.error('Server: Erro ao definir intensidade master global:', error.message);
+            io.emit('server_message', `Erro ao definir intensidade master global: ${error.message}`);
+        }
+    });
+
+    socket.on('start_effect', (data) => {
+        console.log('Server: Recebido start_effect:', data);
+        try {
+            const effectId = effectsEngine.startEffect(data.type, data.fixtureIds, data.params);
+            if (effectId) {
+                io.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+                socket.emit('server_message', `Efeito '${data.type}' iniciado com sucesso.`);
+            } else {
+                socket.emit('server_message', `Erro ao iniciar efeito '${data.type}'.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao iniciar efeito:', error.message);
+            io.emit('server_message', `Erro ao iniciar efeito: ${error.message}`);
+        }
+    });
+
+    socket.on('stop_effect', (effectId) => {
+        console.log('Server: Recebido stop_effect:', effectId);
+        try {
+            effectsEngine.stopEffect(effectId);
+            io.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+            socket.emit('server_message', `Efeito '${effectId}' parado.`);
+        } catch (error) {
+            console.error('Server: Erro ao parar efeito:', error.message);
+            io.emit('server_message', `Erro ao parar efeito: ${error.message}`);
+        }
+    });
+
+    socket.on('stop_all_effects', () => {
+        console.log('Server: Recebido stop_all_effects.');
+        try {
+            effectsEngine.stopAllEffects();
+            io.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+            socket.emit('server_message', `Todos os efeitos parados.`);
+        } catch (error) {
+            console.error('Server: Erro ao parar todos os efeitos:', error.message);
+            io.emit('server_message', `Erro ao parar todos os efeitos: ${error.message}`);
+        }
+    });
+
+    socket.on('update_effect', (data) => {
+        console.log('Server: Recebido update_effect:', data);
+        try {
+            effectsEngine.updateEffect(data.effectId, data.newParams);
+            io.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+            socket.emit('server_message', `Efeito '${data.effectId}' atualizado.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar efeito:', error.message);
+            io.emit('server_message', `Erro ao atualizar efeito: ${error.message}`);
+        }
+    });
+
+    socket.on('request_active_effects_status', () => {
+        socket.emit('active_effects_status', effectsEngine.getActiveEffectsStatus());
+    });
+
+    socket.on('create_executor', (executorData) => {
+        try {
+            const newExecutor = executorModule.createExecutor(executorData);
+            io.emit('executors_updated', executorModule.getAllExecutors());
+            io.emit('server_message', `Executor '${newExecutor.name}' criado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao criar executor:', error.message);
+            io.emit('server_message', `Erro ao criar executor: ${error.message}`);
+        }
+    });
+
+    socket.on('update_executor', (data) => {
+        try {
+            const updatedExecutor = executorModule.updateExecutor(data.id, data.updates);
+            io.emit('executors_updated', executorModule.getAllExecutors());
+            io.emit('server_message', `Executor '${updatedExecutor.name}' atualizado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao atualizar executor:', error.message);
+            io.emit('server_message', `Erro ao atualizar executor: ${error.message}`);
+        }
+    });
+
+    socket.on('delete_executor', (id) => {
+        try {
+            const success = executorModule.deleteExecutor(id);
+            if (success) {
+                io.emit('executors_updated', executorModule.getAllExecutors());
+                io.emit('server_message', `Executor '${id}' removido com sucesso.`);
+            } else {
+                io.emit('server_message', `Executor '${id}' não encontrado para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover executor:', error.message);
+            io.emit('server_message', `Erro ao remover executor: ${error.message}`);
+        }
+    });
+
+    socket.on('request_executors_status', () => {
+        socket.emit('executors_updated', executorModule.getAllExecutors());
+    });
+
+    socket.on('save_midi_mapping', (mappingData) => {
+        try {
+            const newMapping = midiMappingModule.saveMidiMapping(mappingData);
+            io.emit('midi_mappings_updated', midiMappingModule.getAllMidiMappings());
+            io.emit('server_message', `Mapeamento MIDI para ${newMapping.targetType} (Tipo: ${newMapping.midiType}) guardado com sucesso.`);
+        } catch (error) {
+            console.error('Server: Erro ao guardar mapeamento MIDI:', error.message);
+            io.emit('server_message', `Erro ao guardar mapeamento MIDI: ${error.message}`);
+        }
+    });
+
+    socket.on('delete_midi_mapping', (id) => {
+        try {
+            const success = midiMappingModule.deleteMidiMapping(id);
+            if (success) {
+                io.emit('midi_mappings_updated', midiMappingModule.getAllMidiMappings());
+                io.emit('server_message', `Mapeamento MIDI '${id.substring(0, 8)}...' removido com sucesso.`);
+            } else {
+                io.emit('server_message', `Mapeamento MIDI '${id.substring(0, 8)}...' não encontrado para remoção.`);
+            }
+        } catch (error) {
+            console.error('Server: Erro ao remover mapeamento MIDI:', error.message);
+            io.emit('server_message', `Erro ao remover mapeamento MIDI: ${error.message}`);
+        }
+    });
+
+    socket.on('request_midi_mappings', () => {
+        socket.emit('midi_mappings_updated', midiMappingModule.getAllMidiMappings());
+    });
+
+    socket.on('request_fixtures', () => {
+        socket.emit('fixtures_updated', patch.getAllFixtures());
+    });
+
+    socket.on('request_personalities', () => {
+        socket.emit('personalities_updated', personality.getAllPersonalities());
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Cliente desconectado:', socket.id);
+        io.emit('server_message', `Cliente desconectado: ${socket.id}`);
+    });
 });
 
-socket.on('pause_playback', () => {
-    playback.pausePlayback();
-    io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-    socket.emit('server_message', `Comando 'pause_playback' recebido.`);
+
+server.listen(PORT, async () => {
+    console.log(`Servidor do Engine/Core a correr na porta ${PORT}`);
+    io.emit('server_message', `Server Engine/Core iniciado na porta ${PORT}.`);
+
+    playback.initPlayback(io, sendDmxCommandToUniverse, clearDmxUniverse);
+    effectsEngine.initEffectsEngine(sendDmxCommandToUniverse);
+    executorModule.initExecutorModule(playback, cuelist);
+    programmerModule.initProgrammerModule(io, sendDmxCommandToUniverse, patch, personality);
+
+
+    setTimeout(() => {
+        if (universe) {
+            console.log('Enviando teste DMX: Canal 1 para 255 (fade de 2s)...');
+            sendDmxCommandToUniverse(1, 255, 2.0);
+            console.log('DMX fade (teste inicial) enviado!');
+
+            setTimeout(() => {
+                console.log('Enviando teste DMX: Canal 1 para 0 (fade de 2s)...');
+                sendDmxCommandToUniverse(1, 0, 2.0);
+                console.log('DMX fade (teste final) desligado!');
+            }, 5000);
+        } else {
+            console.warn('Universo DMX não está disponível para o teste temporizado.');
+        }
+    }, 5000);
+
+    setTimeout(() => {
+        if (midiPortOpen) {
+            console.log('Enviando teste MIDI: Note On (C3, 100)...');
+            output.sendMessage([0x90, 60, 100]);
+            console.log('MIDI enviado!');
+
+            setTimeout(() => {
+                console.log('Enviando teste MIDI: Note Off (C3, 0)...');
+                output.sendMessage([0x80, 60, 0]);
+                console.log('MIDI desligado!');
+            }, 1000);
+        } else {
+            console.warn('Porta MIDI não está disponível para o teste temporizado.');
+        }
+    }, 10000);
 });
 
-socket.on('resume_playback', async () => {
-    try {
-        await playback.resumePlayback();
-        io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-        socket.emit('server_message', `Comando 'resume_playback' recebido.`);
-    } catch (error) {
-        socket.emit('server_message', `Erro ao retomar playback: ${error.message}`);
-        console.error('Server: Erro ao retomar playback:', error.message);
-    }
-});
-
-socket.on('stop_playback', async () => {
-    try {
-        await playback.stopPlayback();
-        io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-        socket.emit('server_message', `Comando 'stop_playback' recebido.`);
-    } catch (error) {
-        socket.emit('server_message', `Erro ao parar playback: ${error.message}`);
-        console.error('Server: Erro ao parar playback:', error.message);
-    }
-});
-
-socket.on('next_cue', async () => {
-    try {
-        await playback.nextCue();
-        io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-        socket.emit('server_message', `Comando 'next_cue' recebido.`);
-    } catch (error) {
-        socket.emit('server_message', `Erro ao avançar cue: ${error.message}`);
-        console.error('Server: Erro ao avançar cue:', error.message);
-    }
-});
-
-socket.on('prev_cue', async () => {
-    try {
-        await playback.prevCue();
-        io.emit('playback_status_updated', playback.getPlaybackState()); // Atualiza o estado para todos os clientes
-        socket.emit('server_message', `Comando 'prev_cue' recebido.`);
-    } catch (error) {
-        socket.emit('server_message', `Erro ao voltar cue: ${error.message}`);
-        console.error('Server: Erro ao voltar cue:', error.message);
-    }
-});
-
-// Envia o estado atual do playback para o cliente recém-conectado
-socket.emit('playback_status_updated', playback.getPlaybackState());
-});
-
-// --- Teste de Envio DMX e MIDI após alguns segundos ---
-server.listen(PORT, () => {
-  console.log(`Servidor do Engine/Core a correr na porta ${PORT}`);
-
-// NOVO: Inicializa o módulo de playback
-  // Passa a instância do socket.io e uma função para enviar comandos DMX
- playback.initializePlayback(io, (channel, value, fadeTime) => {
-      // Esta é a função que o playback.js vai chamar para enviar DMX.
-      // Ela usa a mesma lógica que o socket.on('dmx_command') usa no server.js.
-      // Replicamos a lógica de adicionar ao activeFades aqui.
-      const currentVal = currentDmxState[channel]; // Pega o valor atual do canal
-      const fadeTimeMs = fadeTime * 1000;
-
-      if (fadeTime > 0) {
-          activeFades.set(channel, {
-              startValue: currentVal,
-              targetValue: value,
-              startTime: Date.now(),
-              fadeTimeMs: fadeTimeMs
-          });
-          // console.log(`DMX Commander: Canal ${channel} a fazer fade para ${value} em ${fadeTime}s`);
-      } else {
-          currentDmxState[channel] = value;
-          universe.update({ [channel]: value });
-          activeFades.delete(channel);
-          // console.log(`DMX Commander: Canal ${channel} definido instantaneamente para ${value}`);
-      }
-      // Sempre notificar o frontend sobre a mudança do estado DMX, mesmo que gradual
-      io.emit('dmx_state_updated', currentDmxState);
-  }); 
-
-// Teste DMX: Acende o canal 1 para 255 (full) após 5 segundos com fade
-setTimeout(() => {
-    if (universe) {
-      console.log('Enviando teste DMX: Canal 1 para 255 (fade de 2s)...');
-      // Agora chamamos a mesma lógica que o 'dmx_command' usa
-      const channel = 1;
-      const value = 255;
-      const fadeTime = 2.0; // 2 segundos
-
-      const fadeTimeMs = fadeTime * 1000;
-      activeFades.set(channel, {
-          startValue: currentDmxState[channel],
-          targetValue: value,
-          startTime: Date.now(),
-          fadeTimeMs: fadeTimeMs
-      });
-      io.emit('dmx_state_updated', currentDmxState); // Notifica o frontend
-      console.log('DMX fade (teste inicial) enviado!');
-
-      // Desliga o canal 1 após mais 5 segundos com fade
-      setTimeout(() => {
-        console.log('Enviando teste DMX: Canal 1 para 0 (fade de 2s)...');
-        const channelOff = 1;
-        const valueOff = 0;
-        const fadeTimeOff = 2.0; // 2 segundos
-
-        const fadeTimeMsOff = fadeTimeOff * 1000;
-        activeFades.set(channelOff, {
-            startValue: currentDmxState[channelOff],
-            targetValue: valueOff,
-            startTime: Date.now(),
-            fadeTimeMs: fadeTimeMsOff
-        });
-        io.emit('dmx_state_updated', currentDmxState); // Notifica o frontend
-        console.log('DMX fade (teste final) desligado!');
-      }, 5000); // 5 segundos após o primeiro fade
-    } else {
-        console.warn('Universo DMX não está disponível para o teste temporizado.');
-    }
-  }, 5000); // 5 segundos após o início do servidor
-
-  // Teste MIDI: Envia um Note On (Nota 60, Velocidade 100) após 10 segundos
-  setTimeout(() => {
-    if (midiPortOpen) {
-        console.log('Enviando teste MIDI: Note On (C3, 100)...');
-        output.sendMessage([0x90, 60, 100]);
-        console.log('MIDI enviado!');
-
-        // Envia um Note Off após 1 segundo
-        setTimeout(() => {
-            console.log('Enviando teste MIDI: Note Off (C3, 0)...');
-            output.sendMessage([0x80, 60, 0]);
-            console.log('MIDI desligado!');
-        }, 1000);
-    } else {
-        console.warn('Porta MIDI não está disponível para o teste temporizado.');
-    }
-  }, 10000); // 10 segundos após o início do servidor
-});
-
-// Tratamento de erros para fechar a porta MIDI ao sair
 process.on('exit', () => {
     if (midiPortOpen) {
+        input.closePort();
         output.closePort();
-        console.log('Porta MIDI fechada.');
+        console.log('Portas MIDI fechadas.');
     }
-    // Ao encerrar, tenta garantir que o DMX fica a zero, se o universo existir
     if (universe) {
         universe.updateAll(0);
         console.log('Todos os canais DMX zerados ao encerrar.');
@@ -604,6 +869,14 @@ process.on('exit', () => {
 
 process.on('SIGINT', () => {
     console.log('\nServidor encerrado por Ctrl+C. Fechando portas e zerando DMX...');
-    // A função process.on('exit') é chamada depois, então ela tratará o fechamento
+    clearDmxUniverse();
+    effectsEngine.stopAllEffects();
+    process.exit();
+});
+
+process.on('SIGTERM', () => {
+    console.log('\nServidor encerrado por SIGTERM. Fechando portas e zerando DMX...');
+    clearDmxUniverse();
+    effectsEngine.stopAllEffects();
     process.exit();
 });

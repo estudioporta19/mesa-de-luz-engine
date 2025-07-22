@@ -1,131 +1,126 @@
 // mesa-de-luz-engine/src/modules/patch.js
 
-// Array para armazenar os fixtures em memória.
-// Mais tarde, isto será substituído por uma base de dados (SQLite3).
-const fixtures = [];
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
-// Função para gerar um ID único para o fixture
-const generateUniqueId = () => {
-  return 'fixture_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-};
+const FIXTURES_FILE = path.join(__dirname, '../../data/fixtures.json');
+let fixtures = [];
 
 /**
- * Adiciona um novo fixture.
- * @param {object} fixtureData - Dados do fixture (name, type, startChannel, etc.).
- * @returns {object} O fixture adicionado com um ID único.
+ * Carrega os fixtures do ficheiro.
  */
-const createFixture = (fixtureData) => {
+function loadFixturesFromFile() {
+  try {
+    if (fs.existsSync(FIXTURES_FILE)) {
+      const data = fs.readFileSync(FIXTURES_FILE, 'utf8');
+      fixtures = JSON.parse(data);
+      console.log(`Patch: ${fixtures.length} fixtures carregados do ficheiro.`);
+    } else {
+      fixtures = [];
+      console.log('Patch: Ficheiro de fixtures não encontrado. Iniciando com lista vazia.');
+    }
+  } catch (error) {
+    console.error('Patch: Erro ao carregar fixtures:', error.message);
+    fixtures = []; // Garante que a lista está vazia em caso de erro
+  }
+}
+
+/**
+ * Guarda os fixtures para o ficheiro.
+ */
+function saveFixturesToFile() {
+  try {
+    fs.writeFileSync(FIXTURES_FILE, JSON.stringify(fixtures, null, 2), 'utf8');
+    console.log('Patch: Fixtures guardados para o ficheiro.');
+  } catch (error) {
+    console.error('Patch: Erro ao guardar fixtures:', error.message);
+  }
+}
+
+/**
+ * Retorna todos os fixtures.
+ * @returns {Array<object>} A lista de fixtures.
+ */
+function getAllFixtures() {
+  return [...fixtures]; // Retorna uma cópia para evitar modificações diretas
+}
+
+/**
+ * Retorna um fixture pelo seu ID.
+ * @param {string} id - O ID do fixture.
+ * @returns {object | undefined} O objeto fixture se encontrado, caso contrário undefined.
+ */
+function getFixtureById(id) {
+  return fixtures.find(fixture => fixture.id === id);
+}
+
+/**
+ * Cria um novo fixture.
+ * @param {object} fixtureData - Os dados do novo fixture (name, type, startChannel, universeId, personalityId).
+ * @returns {object} O fixture criado.
+ * @throws {Error} Se os dados forem inválidos.
+ */
+function createFixture(fixtureData) {
+  if (!fixtureData.name || !fixtureData.startChannel || !fixtureData.personalityId) {
+    throw new Error('Nome, Canal Inicial e Personalidade são obrigatórios para criar um fixture.');
+  }
   const newFixture = {
-    id: generateUniqueId(),
-    name: fixtureData.name || 'Novo Fixture',
-    manufacturer: fixtureData.manufacturer || 'Desconhecido',
-    model: fixtureData.model || 'Desconhecido',
-    type: fixtureData.type || 'Generic', // Ex: 'LED_PAR', 'Moving_Head'
-    universeId: fixtureData.universeId || 'my-universe', // ID do universo DMX ao qual pertence
-    startChannel: fixtureData.startChannel, // Canal DMX inicial (obrigatório)
-    personalityId: fixtureData.personalityId || 'default', // ID da personalidade (para tipos de canais)
-    // Exemplo de estrutura de canais - será mais detalhado com o módulo Personality
-    channels: fixtureData.channels || [
-      { name: 'Dimmer', channelOffset: 0, default: 255, min: 0, max: 255 }
-    ],
-    // Outras propriedades conforme o protocolo ou necessidade
-    patchedAt: new Date().toISOString()
+    id: uuidv4(),
+    name: fixtureData.name,
+    type: fixtureData.type || 'Generic',
+    startChannel: parseInt(fixtureData.startChannel, 10),
+    universeId: fixtureData.universeId || 'my-universe',
+    personalityId: fixtureData.personalityId
   };
-
-  // Validação básica: startChannel é obrigatório e deve ser um número
-  if (typeof newFixture.startChannel !== 'number' || newFixture.startChannel < 1 || newFixture.startChannel > 512) {
-    throw new Error('startChannel é obrigatório e deve ser um número entre 1 e 512.');
-  }
-
-  // Verificar se já existe um fixture com o mesmo startChannel no mesmo universo
-  const conflict = fixtures.some(f =>
-    f.universeId === newFixture.universeId &&
-    f.startChannel === newFixture.startChannel
-  );
-  if (conflict) {
-    throw new Error(`Já existe um fixture patchado no canal ${newFixture.startChannel} do universo ${newFixture.universeId}.`);
-  }
-
   fixtures.push(newFixture);
-  console.log('Fixture criado:', newFixture.id, newFixture.name, 'no canal', newFixture.startChannel);
+  saveFixturesToFile();
+  console.log(`Patch: Fixture '${newFixture.name}' criado.`);
   return newFixture;
-};
+}
 
 /**
  * Atualiza um fixture existente.
- * @param {string} id - ID do fixture a atualizar.
- * @param {object} updates - Objeto com as propriedades a atualizar.
+ * @param {string} id - O ID do fixture a atualizar.
+ * @param {object} updates - As propriedades a atualizar.
  * @returns {object} O fixture atualizado.
+ * @throws {Error} Se o fixture não for encontrado.
  */
-const updateFixture = (id, updates) => {
-  const index = fixtures.findIndex(f => f.id === id);
+function updateFixture(id, updates) {
+  const index = fixtures.findIndex(fixture => fixture.id === id);
   if (index === -1) {
-    throw new Error(`Fixture com ID ${id} não encontrado.`);
+    throw new Error(`Fixture com ID '${id}' não encontrado.`);
   }
-
-  // Prevenir que o ID seja alterado
-  if (updates.id && updates.id !== id) {
-    throw new Error('Não é permitido alterar o ID de um fixture.');
-  }
-
-  // Se o startChannel ou universeId for atualizado, verificar conflitos
-  if ((updates.startChannel && updates.startChannel !== fixtures[index].startChannel) ||
-      (updates.universeId && updates.universeId !== fixtures[index].universeId)) {
-    const newStartChannel = updates.startChannel || fixtures[index].startChannel;
-    const newUniverseId = updates.universeId || fixtures[index].universeId;
-
-    const conflict = fixtures.some((f, i) =>
-      i !== index && // Não comparar com o próprio fixture
-      f.universeId === newUniverseId &&
-      f.startChannel === newStartChannel
-    );
-    if (conflict) {
-      throw new Error(`A atualização criaria um conflito: já existe um fixture patchado no canal ${newStartChannel} do universo ${newUniverseId}.`);
-    }
-  }
-
   fixtures[index] = { ...fixtures[index], ...updates };
-  console.log('Fixture atualizado:', id);
+  saveFixturesToFile();
+  console.log(`Patch: Fixture '${fixtures[index].name}' atualizado.`);
   return fixtures[index];
-};
+}
 
 /**
- * Remove um fixture.
- * @param {string} id - ID do fixture a remover.
- * @returns {boolean} True se o fixture foi removido, false caso contrário.
+ * Remove um fixture pelo seu ID.
+ * @param {string} id - O ID do fixture a remover.
+ * @returns {boolean} True se o fixture foi removido com sucesso, false caso contrário.
  */
-const deleteFixture = (id) => {
+function deleteFixture(id) {
   const initialLength = fixtures.length;
-  fixtures.splice(fixtures.findIndex(f => f.id === id), 1);
+  fixtures = fixtures.filter(fixture => fixture.id !== id);
   if (fixtures.length < initialLength) {
-    console.log('Fixture removido:', id);
+    saveFixturesToFile();
+    console.log(`Patch: Fixture ${id} removido.`);
     return true;
   }
+  console.log(`Patch: Fixture ${id} não encontrado para remoção.`);
   return false;
-};
+}
 
-/**
- * Obtém todos os fixtures patchados.
- * @returns {Array<object>} Lista de todos os fixtures.
- */
-const getAllFixtures = () => {
-  return fixtures;
-};
-
-/**
- * Obtém um fixture pelo seu ID.
- * @param {string} id - ID do fixture.
- * @returns {object|undefined} O fixture encontrado ou undefined.
- */
-const getFixtureById = (id) => {
-    return fixtures.find(f => f.id === id);
-};
-
+// Carrega os fixtures ao iniciar o módulo
+loadFixturesFromFile();
 
 module.exports = {
+  getAllFixtures,
+  getFixtureById, // NOVO: Exportar esta função
   createFixture,
   updateFixture,
-  deleteFixture,
-  getAllFixtures,
-  getFixtureById
+  deleteFixture
 };

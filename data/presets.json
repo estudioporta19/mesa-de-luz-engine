@@ -1,0 +1,94 @@
+[
+  {
+    "id": "preset_1752750374085_petag845j",
+    "name": "Vermelho",
+    "type": "Color",
+    "values": [
+      {
+        "attribute": "red",
+        "value": 255
+      },
+      {
+        "attribute": "green",
+        "value": 0
+      },
+      {
+        "attribute": "blue",
+        "value": 0
+      },
+      {
+        "attribute": "dimmer",
+        "value": 200
+      }
+    ]
+  },
+  {
+    "id": "preset_1752750411868_kauykv25b",
+    "name": "Verde",
+    "type": "Generic",
+    "values": [
+      {
+        "attribute": "red",
+        "value": 0
+      },
+      {
+        "attribute": "green",
+        "value": 255
+      },
+      {
+        "attribute": "blue",
+        "value": 0
+      },
+      {
+        "attribute": "dimmer",
+        "value": 200
+      }
+    ]
+  },
+  {
+    "id": "preset_1752750504877_wqjv7zaw9",
+    "name": "BO",
+    "type": "Generic",
+    "values": [
+      {
+        "attribute": "red",
+        "value": 0
+      },
+      {
+        "attribute": "green",
+        "value": 0
+      },
+      {
+        "attribute": "blue",
+        "value": 0
+      },
+      {
+        "attribute": "dimmer",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "id": "preset_a24a0fcb-8a65-4dac-ae11-fcec81337273",
+    "name": "LARANJA",
+    "type": "Color",
+    "values": [
+      {
+        "attribute": "red",
+        "value": 255
+      },
+      {
+        "attribute": "green",
+        "value": 255
+      },
+      {
+        "attribute": "blue",
+        "value": 0
+      },
+      {
+        "attribute": "dimmer",
+        "value": 200
+      }
+    ]
+  }
+]

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "e4004f96-c2c0-41ea-892a-310d055a9cc8",
+    "targetType": "programmer",
+    "fixtureId": "fixture_1752750203189_wpt26tzaj",
+    "attributeName": "white",
+    "midiType": "cc",
+    "midiChannel": 1,
+    "midiControl": 7,
+    "minValue": 0,
+    "maxValue": 127,
+    "targetMin": 0,
+    "targetMax": 255
+  },
+  {
+    "id": "c3782903-7ed0-4bc3-bcfb-d066a342a87c",
+    "targetType": "programmer",
+    "fixtureId": "fixture_1752750203189_wpt26tzaj",
+    "attributeName": "dimmer",
+    "midiType": "cc",
+    "midiChannel": 1,
+    "midiControl": 6,
+    "minValue": 0,
+    "maxValue": 127,
+    "targetMin": 0,
+    "targetMax": 255
+  },
+  {
+    "id": "27d5d92f-144d-4e6c-aedb-95847e0ab98e",
+    "targetType": "executor",
+    "executorId": "e253b259-ab2b-4a43-aed5-4b3bd4c83fbb",
+    "midiType": "cc",
+    "midiChannel": 1,
+    "midiControl": 0,
+    "minValue": 0,
+    "maxValue": 127,
+    "targetMin": 0,
+    "targetMax": 255
+  }
+]

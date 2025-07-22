@@ -1,0 +1,274 @@
+[
+  {
+    "id": "fixture_1752750203189_wpt26tzaj",
+    "name": "LAT BOT",
+    "type": "LED_PAR",
+    "startChannel": 380,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "fixture_1752750219155_esz0hz0ky",
+    "name": "LAT TOP",
+    "type": "LED_PAR",
+    "startChannel": 388,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "191aebfc-b9ce-47b4-b916-c06b7707812b",
+    "name": "LED CTN _1",
+    "type": "Generic",
+    "startChannel": 300,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "b954305b-8368-490c-9ae8-07ed7b0450bc",
+    "name": "LED CTN _2",
+    "type": "Generic",
+    "startChannel": 308,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "61270bb1-2033-49f3-882b-1bf5297c68f8",
+    "name": "LED CTN _3",
+    "type": "Generic",
+    "startChannel": 316,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "937f0f54-0fee-4ca4-88e2-b58e04b3a45e",
+    "name": "LED CTN _4",
+    "type": "Generic",
+    "startChannel": 324,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "9c8ee42c-0866-4a74-b244-59c2d7a8614f",
+    "name": "LED CTN _5",
+    "type": "Generic",
+    "startChannel": 332,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "5c548e37-4f2f-4cd6-822e-ccd3c4418bcb",
+    "name": "LED CTN _6",
+    "type": "Generic",
+    "startChannel": 340,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "85c9b4a7-3057-43b3-a7d7-c56536e62bc7",
+    "name": "LED CTN _7",
+    "type": "Generic",
+    "startChannel": 348,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "1a72c6fb-09f1-476a-ad88-175b0e53fd13",
+    "name": "LED CTN _8",
+    "type": "Generic",
+    "startChannel": 356,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "13d0d076-d28e-4d77-8627-d82b04ca2fb6",
+    "name": "LED CTN _9",
+    "type": "Generic",
+    "startChannel": 364,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "e07bfa9f-7522-491d-a746-faeb22d1e823",
+    "name": "LED CTN _10",
+    "type": "Generic",
+    "startChannel": 372,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750124563_oxpnqti1y"
+  },
+  {
+    "id": "679ba03b-e474-45e8-a8be-01cfd78b5d01",
+    "name": "Recorte  _1",
+    "type": "Generic",
+    "startChannel": 1,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "f8dbcec8-5f21-451b-a7fc-706dffe03621",
+    "name": "Recorte  _2",
+    "type": "Generic",
+    "startChannel": 2,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "8660cf57-2bd3-4372-a433-fdb403e6924b",
+    "name": "Recorte  _3",
+    "type": "Generic",
+    "startChannel": 3,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "c7fed480-47a6-4745-bc26-8b9919075bb3",
+    "name": "Recorte  _4",
+    "type": "Generic",
+    "startChannel": 4,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "f9d145ba-eb00-4dd0-a583-e9629d967834",
+    "name": "Recorte  _5",
+    "type": "Generic",
+    "startChannel": 5,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "afc907c8-b8d7-4f26-9ee1-a0a78393feb3",
+    "name": "PUB PC  _1",
+    "type": "Generic",
+    "startChannel": 13,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "37e75372-b1b1-441f-a72b-2c7317fafcb0",
+    "name": "PUB PC  _2",
+    "type": "Generic",
+    "startChannel": 14,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "7323fb2d-0d0c-474a-896a-1f99d6330d9a",
+    "name": "PUB PC  _3",
+    "type": "Generic",
+    "startChannel": 15,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "0e0e32d6-e0fe-4ed8-a354-26675582a476",
+    "name": "PUB PC  _4",
+    "type": "Generic",
+    "startChannel": 16,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "a7e114ae-c012-4d84-b6e6-1a1c0e37e972",
+    "name": "PUB PC  _5",
+    "type": "Generic",
+    "startChannel": 17,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "eb5e0ca2-91d7-4b20-a230-295f84aefe7c",
+    "name": "PUB PC  _6",
+    "type": "Generic",
+    "startChannel": 18,
+    "universeId": "my-universe",
+    "personalityId": "pers_00735181-8fec-496c-b188-d5bb18768a69"
+  },
+  {
+    "id": "0739e231-d63d-44a4-aec1-b6b990260e6f",
+    "name": "PC PALCO _1",
+    "type": "Generic",
+    "startChannel": 43,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "a7e1843c-d35c-43d8-a63a-adf934a4fb2d",
+    "name": "PC PALCO _2",
+    "type": "Generic",
+    "startChannel": 46,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "852cf147-21e8-4bdb-bece-839c65a7803e",
+    "name": "PC FTE_1",
+    "type": "Generic",
+    "startChannel": 49,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "5c359cd1-ef3d-44f2-b0ce-76d444e78ba5",
+    "name": "PC FTE_2",
+    "type": "Generic",
+    "startChannel": 52,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "f86bc583-d924-4aa3-9928-3274e3a75752",
+    "name": "PC FTE_3",
+    "type": "Generic",
+    "startChannel": 55,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "5a1b75bf-b896-4d1b-8aa5-280130e89d7b",
+    "name": "PC FTE_4",
+    "type": "Generic",
+    "startChannel": 58,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "00c1ce9c-15fc-4bf7-9f38-8ea9dfab9803",
+    "name": "PC FTE_5",
+    "type": "Generic",
+    "startChannel": 61,
+    "universeId": "my-universe",
+    "personalityId": "pers_1752750750859_6sxcks2me"
+  },
+  {
+    "id": "ccb16bbd-068a-4a16-8b9a-1c467625783f",
+    "name": "CHAUVET COLORADO_1",
+    "type": "Generic",
+    "startChannel": 200,
+    "universeId": "my-universe",
+    "personalityId": "pers_7e9fa4dc-71cf-4ae6-8b4b-ed029a7eb5f9"
+  },
+  {
+    "id": "05033bba-1a87-4ca8-abb5-1e1a66650a5a",
+    "name": "CHAUVET COLORADO_2",
+    "type": "Generic",
+    "startChannel": 213,
+    "universeId": "my-universe",
+    "personalityId": "pers_7e9fa4dc-71cf-4ae6-8b4b-ed029a7eb5f9"
+  },
+  {
+    "id": "a96b3cf0-3369-4b48-a13a-17bd61afce28",
+    "name": "CHAUVET COLORADO_3",
+    "type": "Generic",
+    "startChannel": 226,
+    "universeId": "my-universe",
+    "personalityId": "pers_7e9fa4dc-71cf-4ae6-8b4b-ed029a7eb5f9"
+  },
+  {
+    "id": "83186004-fb87-4c3c-b779-a042722559c1",
+    "name": "CHAUVET COLORADO_4",
+    "type": "Generic",
+    "startChannel": 239,
+    "universeId": "my-universe",
+    "personalityId": "pers_7e9fa4dc-71cf-4ae6-8b4b-ed029a7eb5f9"
+  }
+]

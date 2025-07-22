@@ -1,32 +1,62 @@
 [
   {
-    "id": "clist_1752679201990_u4c8s6hqm",
+    "id": "clist_1752742255014_3bnb7reep",
     "name": "Cue List 1",
     "cues": [
       {
-        "id": "cue_1752681275629_e8bnhwrjr",
-        "name": "Cena 1",
-        "fade_in": 6,
-        "delay_in": 6,
+        "id": "cue_1752745512389_v52zv0a71",
+        "name": "Cue 1",
+        "fade_in": 2,
+        "delay_in": 5,
         "values": [
           {
-            "fixtureId": "fixture_abc123",
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
             "attribute": "dimmer",
             "value": 255
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "red",
+            "value": 255
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "green",
+            "value": 0
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "blue",
+            "value": 0
           }
         ],
         "midi_actions": []
       },
       {
-        "id": "cue_1752682555602_7guxn53ro",
-        "name": "Czech",
-        "fade_in": 0.4,
-        "delay_in": 0.4,
+        "id": "cue_1752745768871_bh7g5850u",
+        "name": "Cue List 1",
+        "fade_in": 2,
+        "delay_in": 5,
         "values": [
           {
-            "fixtureId": "fixture_abc123",
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
             "attribute": "dimmer",
-            "value": 111
+            "value": 255
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "red",
+            "value": 255
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "green",
+            "value": 0
+          },
+          {
+            "fixtureId": "fixture_1752743409637_cfeaiqx0r",
+            "attribute": "blue",
+            "value": 0
           }
         ],
         "midi_actions": []

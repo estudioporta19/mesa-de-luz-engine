@@ -1,0 +1,224 @@
+[
+  {
+    "id": "pers_1752750124563_oxpnqti1y",
+    "name": "VARYTEC",
+    "model": "14x8",
+    "numChannels": 8,
+    "attributes": [
+      {
+        "name": "dimmer",
+        "offset": 0,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "red",
+        "offset": 1,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "green",
+        "offset": 2,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "blue",
+        "offset": 3,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "white",
+        "offset": 4,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "macro cor",
+        "offset": 5,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "strobe",
+        "offset": 6,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "chase ",
+        "offset": 7,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      }
+    ]
+  },
+  {
+    "id": "pers_1752750750859_6sxcks2me",
+    "name": "Briteq",
+    "model": "TW-400",
+    "numChannels": 3,
+    "attributes": [
+      {
+        "name": "dimmer",
+        "offset": 0,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "uv",
+        "offset": 1,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "zoom",
+        "offset": 2,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      }
+    ]
+  },
+  {
+    "id": "pers_00735181-8fec-496c-b188-d5bb18768a69",
+    "name": "Dimmer",
+    "model": "1 canal",
+    "numChannels": 1,
+    "attributes": [
+      {
+        "name": "dimmer",
+        "offset": 0,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      }
+    ]
+  },
+  {
+    "id": "pers_dcdb8d80-d096-4cde-8956-36eb09013fd6",
+    "name": "Chauvet",
+    "model": "Ovation 260 WW",
+    "numChannels": 1,
+    "attributes": [
+      {
+        "name": "dimmer",
+        "offset": 0,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      }
+    ]
+  },
+  {
+    "id": "pers_7e9fa4dc-71cf-4ae6-8b4b-ed029a7eb5f9",
+    "name": "Chauvet",
+    "model": "Colorado Batten 72",
+    "numChannels": 13,
+    "attributes": [
+      {
+        "name": "dimmer",
+        "offset": 0,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "red",
+        "offset": 1,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "green",
+        "offset": 2,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "blue",
+        "offset": 3,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "white",
+        "offset": 4,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "amber",
+        "offset": 5,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "intensity",
+        "offset": 6,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "uv",
+        "offset": 7,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "strobe",
+        "offset": 8,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "pan",
+        "offset": 9,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "tilt",
+        "offset": 10,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "gobo",
+        "offset": 11,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      },
+      {
+        "name": "focus",
+        "offset": 12,
+        "defaultValue": 0,
+        "min": 0,
+        "max": 255
+      }
+    ]
+  }
+]

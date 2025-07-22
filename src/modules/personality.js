@@ -1,134 +1,125 @@
 // mesa-de-luz-engine/src/modules/personality.js
 
-// Array para armazenar as definições de personalidade em memória.
-// Cada personalidade define o mapeamento dos canais DMX para atributos.
-const personalities = [];
+const { v4: uuidv4 } = require('uuid');
+const fs = require('fs').promises;
+const path = require('path');
+// Importar funções de validação que criámos no validation.js
+const { validateAttribute, validatePersonality: validatePersonalityData } = require('./validation');
 
-// Função para gerar um ID único para a personalidade
-const generateUniqueId = () => {
-  return 'personality_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-};
+const PERSONALITIES_FILE = path.join(__dirname, '..', '..', 'data', 'personalities.json');
+let personalities = [];
 
-// Exemplo de como uma personalidade e seus canais podem ser estruturados
-// Um canal pode ter um offset (relativo ao startChannel do fixture),
-// um atributo (Dimmer, Pan, Red, etc.), e informações como min/max/default, tipo.
-/*
-Exemplo de estrutura de personalidade:
-{
-  id: 'personality_abc',
-  name: 'Generic Dimmer',
-  manufacturer: 'Generic',
-  model: 'Dimmer',
-  numChannels: 1, // Número total de canais DMX que esta personalidade usa
-  channels: [
-    {
-      offset: 0, // DMX Address = fixture.startChannel + offset
-      attribute: 'Dimmer',
-      type: '8bit', // '8bit', '16bit', 'strobe', 'color', 'gobo', 'control'
-      default: 255,
-      min: 0,
-      max: 255,
-      // Para canais com valores discretos (gobo, cor):
-      // values: [ { name: 'Open', value: 0 }, { name: 'Gobo1', value: 10 } ]
+// Função para carregar personalidades do ficheiro JSON
+async function loadPersonalities() {
+    try {
+        const data = await fs.readFile(PERSONALITIES_FILE, 'utf8');
+        personalities = JSON.parse(data);
+        console.log(`Personalities loaded from ${PERSONALITIES_FILE}`);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.warn(`Personalities file not found: ${PERSONALITIES_FILE}. Initializing with empty array.`);
+            personalities = [];
+        } else {
+            console.error(`Error loading personalities from ${PERSONALITIES_FILE}:`, error);
+            personalities = [];
+        }
     }
-  ]
 }
-*/
+
+// Função para salvar personalidades para o ficheiro JSON
+async function savePersonalities() {
+    try {
+        await fs.writeFile(PERSONALITIES_FILE, JSON.stringify(personalities, null, 2), 'utf8');
+        console.log(`Personalities saved to ${PERSONALITIES_FILE}`);
+    } catch (error) {
+        console.error(`Error saving personalities to ${PERSONALITIES_FILE}:`, error);
+    }
+}
+
+// Chamar loadPersonalities uma vez ao iniciar o módulo
+// Isto é importante para carregar os dados existentes quando o servidor inicia.
+loadPersonalities();
 
 /**
- * Adiciona uma nova definição de personalidade.
- * @param {object} personalityData - Dados da personalidade (name, model, numChannels, channels).
- * @returns {object} A personalidade adicionada com um ID único.
+ * Cria uma nova personalidade e a adiciona à lista.
+ * @param {object} personalityData - Dados da nova personalidade (name, model, numChannels, attributes).
+ * @returns {object} - A personalidade criada.
  */
-const createPersonality = (personalityData) => {
-  const newPersonality = {
-    id: generateUniqueId(),
-    name: personalityData.name || 'Nova Personalidade',
-    manufacturer: personalityData.manufacturer || 'Desconhecido',
-    model: personalityData.model || 'Desconhecido',
-    numChannels: personalityData.numChannels, // Quantidade de canais DMX que esta personalidade utiliza
-    channels: personalityData.channels || [], // Array de objetos que descrevem cada canal
-    createdAt: new Date().toISOString()
-  };
+function createPersonality(personalityData) {
+    const newPersonality = {
+        id: `pers_${uuidv4()}`, // Gerar um ID único para a personalidade
+        name: personalityData.name,
+        model: personalityData.model || 'Generic',
+        numChannels: personalityData.numChannels,
+        attributes: personalityData.attributes || [], // Deve ser um array, pode estar vazio inicialmente
+    };
 
-  // Validação básica
-  if (typeof newPersonality.numChannels !== 'number' || newPersonality.numChannels <= 0) {
-    throw new Error('numChannels é obrigatório e deve ser um número positivo.');
-  }
-  if (!Array.isArray(newPersonality.channels)) {
-      throw new Error('Canais devem ser um array.');
-  }
-  if (newPersonality.channels.length === 0) {
-      console.warn('Personalidade criada sem canais definidos. Lembre-se de adicionar canais.');
-  }
+    // Usar a função de validação importada
+    validatePersonalityData(newPersonality);
 
-  // Opcional: Adicionar validações mais detalhadas para a estrutura de cada canal dentro da personalidade
-
-  personalities.push(newPersonality);
-  console.log('Personalidade criada:', newPersonality.id, newPersonality.name, `(${newPersonality.numChannels} canais)`);
-  return newPersonality;
-};
+    personalities.push(newPersonality);
+    savePersonalities(); // Salvar após a criação
+    return newPersonality;
+}
 
 /**
- * Atualiza uma definição de personalidade existente.
- * @param {string} id - ID da personalidade a atualizar.
- * @param {object} updates - Objeto com as propriedades a atualizar.
- * @returns {object} A personalidade atualizada.
+ * Retorna todas as personalidades.
+ * @returns {Array<object>} - Lista de todas as personalidades.
  */
-const updatePersonality = (id, updates) => {
-  const index = personalities.findIndex(p => p.id === id);
-  if (index === -1) {
-    throw new Error(`Personalidade com ID ${id} não encontrada.`);
-  }
-
-  // Prevenir que o ID seja alterado
-  if (updates.id && updates.id !== id) {
-    throw new Error('Não é permitido alterar o ID de uma personalidade.');
-  }
-
-  // Opcional: Adicionar validação se a atualização dos canais é válida
-
-  personalities[index] = { ...personalities[index], ...updates };
-  console.log('Personalidade atualizada:', id);
-  return personalities[index];
-};
+function getAllPersonalities() {
+    return personalities;
+}
 
 /**
- * Remove uma definição de personalidade.
- * @param {string} id - ID da personalidade a remover.
- * @returns {boolean} True se a personalidade foi removida, false caso contrário.
- */
-const deletePersonality = (id) => {
-  const initialLength = personalities.length;
-  personalities.splice(personalities.findIndex(p => p.id === id), 1);
-  if (personalities.length < initialLength) {
-    console.log('Personalidade removida:', id);
-    return true;
-  }
-  return false;
-};
-
-/**
- * Obtém todas as definições de personalidade.
- * @returns {Array<object>} Lista de todas as personalidades.
- */
-const getAllPersonalities = () => {
-  return personalities;
-};
-
-/**
- * Obtém uma personalidade pelo seu ID.
+ * Obtém uma personalidade pelo ID.
  * @param {string} id - ID da personalidade.
- * @returns {object|undefined} A personalidade encontrada ou undefined.
+ * @returns {object|undefined} - A personalidade ou undefined se não encontrada.
  */
-const getPersonalityById = (id) => {
+function getPersonalityById(id) {
     return personalities.find(p => p.id === id);
-};
+}
+
+/**
+ * Atualiza uma personalidade existente.
+ * @param {string} id - ID da personalidade a ser atualizada.
+ * @param {object} updates - Objeto com os campos a serem atualizados.
+ * @returns {object|null} - A personalidade atualizada ou null se não encontrada.
+ */
+function updatePersonality(id, updates) {
+    const index = personalities.findIndex(p => p.id === id);
+    if (index === -1) {
+        throw new Error(`Personalidade com ID ${id} não encontrada.`);
+    }
+
+    const updatedPersonality = { ...personalities[index], ...updates };
+
+    // Validar a personalidade atualizada antes de salvar
+    validatePersonalityData(updatedPersonality);
+
+    personalities[index] = updatedPersonality;
+    savePersonalities(); // Salvar após a atualização
+    return updatedPersonality;
+}
+
+/**
+ * Deleta uma personalidade.
+ * @param {string} id - ID da personalidade a ser deletada.
+ * @returns {boolean} - True se a personalidade foi deletada, false caso contrário.
+ */
+function deletePersonality(id) {
+    const initialLength = personalities.length;
+    personalities = personalities.filter(p => p.id !== id);
+    if (personalities.length < initialLength) {
+        savePersonalities(); // Salvar após a deleção
+        return true;
+    }
+    return false;
+}
 
 module.exports = {
-  createPersonality,
-  updatePersonality,
-  deletePersonality,
-  getAllPersonalities,
-  getPersonalityById
+    createPersonality,
+    getAllPersonalities,
+    getPersonalityById,
+    updatePersonality,
+    deletePersonality,
 };

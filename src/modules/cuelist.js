@@ -3,280 +3,249 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DATA_FILE_PATH = path.join(DATA_DIR, 'cuelists.json'); // Usamos 'cuelists.json' no plural aqui
+const DATA_DIR = path.join(__dirname, '../../data'); // Caminho para a pasta 'data'
+const CUELISTS_FILE = path.join(DATA_DIR, 'cuelists.json');
 
 // Array para armazenar as definições de cuelist em memória.
-// Cada cuelist contém um array de cues.
-let cuelists = []; // <-- MUDAR PARA 'let' para permitir reatribuição após carregar do ficheiro
+let cuelists = [];
 
 // Função para gerar um ID único para cuelists e cues
 const generateUniqueId = (prefix) => {
-  return `${prefix}_` + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  return `${prefix}_` + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 };
 
-// Função para carregar cuelists do ficheiro
+// --- Funções de Persistência ---
+
+/**
+ * Carrega as cuelists do ficheiro JSON para a memória.
+ */
 const loadCuelists = () => {
-    try {
-        if (fs.existsSync(DATA_FILE_PATH)) {
-            const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-            cuelists = JSON.parse(data);
-            console.log(`Cuelists carregadas de ${DATA_FILE_PATH}`);
-        } else {
-            console.log(`Ficheiro de cuelists não encontrado em ${DATA_FILE_PATH}. Será criado um novo.`);
-            // Garante que o diretório 'data' existe e salva um array vazio para começar
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-            fs.writeFileSync(DATA_FILE_PATH, JSON.stringify([], null, 2), 'utf8');
-            cuelists = [];
-        }
-    } catch (error) {
-        console.error('Erro ao carregar cuelists do ficheiro:', error);
-        cuelists = []; // Resetar para array vazio em caso de erro
-    }
+  console.log(`Cuelist Module: Tentando carregar cuelists de ${CUELISTS_FILE}...`);
+  if (!fs.existsSync(DATA_DIR)) {
+    console.log(`Cuelist Module: Pasta de dados '${DATA_DIR}' não encontrada, criando...`);
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (fs.existsSync(CUELISTS_FILE)) {
+    try {
+      const data = fs.readFileSync(CUELISTS_FILE, 'utf8');
+      cuelists = JSON.parse(data);
+      console.log(`Cuelist Module: ${cuelists.length} cuelists carregadas de ${CUELISTS_FILE}.`);
+      console.log('Cuelist Module: Conteúdo das cuelists carregadas:', JSON.stringify(cuelists, null, 2)); // LOG DETALHADO
+    } catch (error) {
+      console.error(`Cuelist Module: Erro ao carregar cuelists de ${CUELISTS_FILE}:`, error.message);
+      cuelists = []; // Em caso de erro, inicializa vazio
+      console.log('Cuelist Module: Cuelists inicializadas como vazias devido a erro de carregamento.');
+    }
+  } else {
+    console.log(`Cuelist Module: Ficheiro ${CUELISTS_FILE} não encontrado. Iniciando com cuelists vazias.`);
+    cuelists = [];
+  }
 };
 
-// Função para guardar cuelists no ficheiro
+/**
+ * Salva as cuelists da memória para o ficheiro JSON.
+ */
 const saveCuelists = () => {
-    try {
-        // Garante que o diretório 'data' existe antes de tentar escrever
-        if (!fs.existsSync(DATA_DIR)) {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-        }
-        fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(cuelists, null, 2), 'utf8');
-        // console.log(`Cuelists salvas em ${DATA_FILE_PATH}`); // Removido para evitar spam no log
-    } catch (error) {
-        console.error('Erro ao salvar cuelists no ficheiro:', error);
-    }
+  try {
+    fs.writeFileSync(CUELISTS_FILE, JSON.stringify(cuelists, null, 2), 'utf8');
+    console.log(`Cuelist Module: Cuelists salvas em ${CUELISTS_FILE}.`);
+  } catch (error) {
+    console.error(`Cuelist Module: Erro ao salvar cuelists em ${CUELISTS_FILE}:`, error.message);
+  }
 };
 
-// Carregar as cuelists quando o módulo é inicializado
+// Carrega as cuelists ao iniciar o módulo
 loadCuelists();
 
 
-// Estrutura esperada para um 'Cue' - AGORA ALINHADA COM O PROTOCOLO
-/*
-{
-  id: 'cue_abc',
-  name: 'Primeiro Estado',
-  fade_in: 2.0,  // Segundos (de acordo com o protocolo)
-  delay_in: 0.0, // Segundos (de acordo com o protocolo)
-  values: [ // Array de valores DMX/Preset
-    { fixtureId: 'fixture_abc123', attribute: 'dimmer', value: 255 },
-    { fixtureId: 'fixture_def456', attribute: 'red', value: 200 }
-  ],
-  midi_actions: [] // Opcional: Ações MIDI
-}
-*/
+// --- Funções CRUD de Cuelists ---
 
-// --- Funções para gerir Cuelists ---
-
-const getAllCuelists = () => {
-  return cuelists;
-};
-
-const getCuelistById = (id) => {
-  return cuelists.find(cl => cl.id === id);
-};
-
+/**
+ * Cria uma nova cuelist e adiciona-a à lista.
+ * @param {object} cuelistData - Objeto contendo o nome da cuelist.
+ * @returns {object} A nova cuelist criada.
+ */
 const createCuelist = (cuelistData) => {
-  if (!cuelistData || !cuelistData.name || typeof cuelistData.name !== 'string' || cuelistData.name.trim() === '') {
-    throw new Error('Nome da cuelist inválido.');
-  }
-  if (cuelists.some(cl => cl.name === cuelistData.name.trim())) {
-    throw new Error(`Cuelist com o nome '${cuelistData.name.trim()}' já existe.`);
-  }
+  if (!cuelistData.name) {
+    throw new Error('Nome da cuelist é obrigatório.');
+  }
+  const existingCuelist = cuelists.find(cl => cl.name === cuelistData.name);
+  if (existingCuelist) {
+    throw new Error(`Cuelist com nome '${cuelistData.name}' já existe.`);
+  }
 
-  const newCuelist = {
-    id: generateUniqueId('clist'),
-    name: cuelistData.name.trim(),
-    cues: Array.isArray(cuelistData.cues) ? cuelistData.cues : [],
-    fade_out_time: typeof cuelistData.fade_out_time === 'number' ? cuelistData.fade_out_time : 1.0 // Fade out padrão ao parar cuelist
-  };
-
-  // Validação básica de cues se fornecidos - AQUI JÁ ESPERAMOS 'fade_in' e 'delay_in'
-  newCuelist.cues.forEach(cue => {
-      if (!cue.id) cue.id = generateUniqueId('cue');
-      if (typeof cue.fade_in !== 'number' || cue.fade_in < 0) cue.fade_in = 0;
-      if (typeof cue.delay_in !== 'number' || cue.delay_in < 0) cue.delay_in = 0;
-      if (!Array.isArray(cue.values)) cue.values = [];
-  });
-
-  cuelists.push(newCuelist);
-  console.log('Cuelist criada:', newCuelist.id, newCuelist.name);
-  saveCuelists();
-  return newCuelist;
+  const newCuelist = {
+    id: generateUniqueId('clist'),
+    name: cuelistData.name,
+    cues: []
+  };
+  cuelists.push(newCuelist);
+  saveCuelists(); // Salva após a criação
+  console.log(`Cuelist Module: Cuelist '${newCuelist.name}' criada com ID '${newCuelist.id}'.`);
+  return newCuelist;
 };
 
+/**
+ * Obtém uma cuelist pelo seu ID.
+ * @param {string} id - ID da cuelist.
+ * @returns {object|undefined} O objeto cuelist ou undefined se não for encontrado.
+ */
+const getCuelistById = (id) => {
+  console.log(`Cuelist Module: getCuelistById chamado com ID: '${id}' (Tipo: ${typeof id})`);
+  const foundCuelist = cuelists.find(cl => cl.id === id);
+  if (foundCuelist) {
+    console.log(`Cuelist Module: Cuelist encontrada: '${foundCuelist.name}' (ID: '${foundCuelist.id}').`);
+  } else {
+    console.warn(`Cuelist Module: Cuelist com ID '${id}' NÃO encontrada.`);
+    console.log('Cuelist Module: Cuelists atuais em memória:', JSON.stringify(cuelists.map(cl => ({id: cl.id, name: cl.name})), null, 2)); // Mostra IDs e nomes para comparação
+  }
+  return foundCuelist;
+};
+
+/**
+ * Obtém todas as cuelists.
+ * @returns {Array<object>} Um array de todas as cuelists.
+ */
+const getAllCuelists = () => {
+  return [...cuelists]; // Retorna uma cópia
+};
+
+/**
+ * Atualiza as propriedades de uma cuelist existente.
+ * @param {string} id - ID da cuelist a atualizar.
+ * @param {object} updates - Objeto com as propriedades a atualizar.
+ * @returns {object} A cuelist atualizada.
+ */
 const updateCuelist = (id, updates) => {
-  const index = cuelists.findIndex(cl => cl.id === id);
-  if (index === -1) {
-    throw new Error(`Cuelist com ID ${id} não encontrada.`);
-  }
-
-  if (updates.name !== undefined) {
-    if (typeof updates.name !== 'string' || updates.name.trim() === '') {
-      throw new Error('Nome da cuelist inválido na atualização.');
-    }
-    if (cuelists.some(cl => cl.id !== id && cl.name === updates.name.trim())) {
-      throw new Error(`Cuelist com o nome '${updates.name.trim()}' já existe.`);
-    }
-    updates.name = updates.name.trim();
-  }
-
-  if (updates.fade_out_time !== undefined) {
-      if (typeof updates.fade_out_time !== 'number' || updates.fade_out_time < 0) {
-          throw new Error('Fade out time da cuelist inválido na atualização. Deve ser um número não-negativo.');
-      }
-  }
-
-  if (updates.cues !== undefined) {
-      throw new Error('Cues devem ser modificados usando as funções específicas addCueToCuelist, updateCueInCuelist, deleteCueFromCuelist.');
-  }
-
-  cuelists[index] = { ...cuelists[index], ...updates };
-  console.log('Cuelist atualizada:', id);
-  saveCuelists();
-  return cuelists[index];
+  const cuelistIndex = cuelists.findIndex(cl => cl.id === id);
+  if (cuelistIndex === -1) {
+    throw new Error(`Cuelist com ID ${id} não encontrada.`);
+  }
+  cuelists[cuelistIndex] = { ...cuelists[cuelistIndex], ...updates };
+  saveCuelists(); // Salva após a atualização
+  console.log(`Cuelist Module: Cuelist '${id}' atualizada.`);
+  return cuelists[cuelistIndex];
 };
 
+/**
+ * Remove uma cuelist da lista.
+ * @param {string} id - ID da cuelist a remover.
+ * @returns {boolean} True se a cuelist foi removida, false caso contrário.
+ */
 const deleteCuelist = (id) => {
-  const initialLength = cuelists.length;
-  const index = cuelists.findIndex(cl => cl.id === id);
-  if (index === -1) {
-      return false;
-  }
-  cuelists.splice(index, 1);
-  if (cuelists.length < initialLength) {
-    console.log('Cuelist removida:', id);
-    saveCuelists();
-    return true;
-  }
-  return false;
+  const initialLength = cuelists.length;
+  cuelists = cuelists.filter(cl => cl.id !== id);
+  if (cuelists.length < initialLength) {
+    saveCuelists(); // Salva após a remoção
+    console.log(`Cuelist Module: Cuelist '${id}' removida.`);
+    return true;
+  }
+  console.warn(`Cuelist Module: Tentativa de remover cuelist '${id}', mas não foi encontrada.`);
+  return false;
 };
 
-// --- Funções para gerir Cues dentro de uma Cuelist ---
+// --- Funções CRUD de Cues dentro de Cuelists ---
 
+/**
+ * Adiciona um novo cue a uma cuelist específica.
+ * @param {string} cuelistId - ID da cuelist.
+ * @param {object} cueData - Objeto contendo nome, fade_in, delay_in e values do cue.
+ * @returns {object} A cuelist atualizada.
+ */
 const addCueToCuelist = (cuelistId, cueData) => {
-  const cuelist = getCuelistById(cuelistId);
-  if (!cuelist) {
-    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para adicionar cue.`);
-  }
-  if (!cueData || !cueData.name || typeof cueData.name !== 'string' || cueData.name.trim() === '') {
-    throw new Error('Nome do cue inválido.');
-  }
+  const cuelist = getCuelistById(cuelistId); // Usa a função de obtenção existente
+  if (!cuelist) {
+    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para adicionar cue.`);
+  }
+  if (!cueData.name || !Array.isArray(cueData.values)) {
+    throw new Error('Nome e valores (array) são obrigatórios para o cue.');
+  }
+  if (typeof cueData.fade_in !== 'number' || cueData.fade_in < 0 || cueData.fade_in > 999.9) {
+    throw new Error('Fade time do cue deve ser um número entre 0 e 999.9.');
+  }
+  if (typeof cueData.delay_in !== 'number' || cueData.delay_in < 0 || cueData.delay_in > 999.9) {
+    throw new Error('Delay time do cue deve ser um número entre 0 e 999.9.');
+  }
 
-  // VALIDAÇÕES AGORA PARA 'fade_in' E 'delay_in' DE ACORDO COM O PROTOCOLO
-  if (typeof cueData.fade_in !== 'number' || cueData.fade_in < 0 || cueData.fade_in > 999.9) {
-    throw new Error('Fade in time do cue inválido. Deve ser um número entre 0 e 999.9.');
-  }
-  if (typeof cueData.delay_in !== 'number' || cueData.delay_in < 0 || cueData.delay_in > 999.9) {
-    throw new Error('Delay time do cue inválido. Deve ser um número entre 0 e 999.9.');
-  }
-  if (!Array.isArray(cueData.values)) {
-      throw new Error('Os valores do cue devem ser um array.');
-  }
-  cueData.values.forEach(v => {
-      if (!v.fixtureId || typeof v.fixtureId !== 'string' || !v.fixtureId.trim()) {
-          throw new Error(`Valor de cue inválido: fixtureId é obrigatório. (${JSON.stringify(v)})`);
-      }
-      if (!v.attribute || typeof v.attribute !== 'string' || !v.attribute.trim()) {
-          throw new Error(`Valor de cue inválido: atributo é obrigatório. (${JSON.stringify(v)})`);
-      }
-      if (typeof v.value !== 'number' || v.value < 0 || v.value > 255) {
-          throw new Error(`Valor DMX inválido para o atributo ${v.attribute} do fixture ${v.fixtureId}. Deve ser entre 0 e 255.`);
-      }
-  });
-
-
-  const newCue = {
-    id: generateUniqueId('cue'),
-    name: cueData.name.trim(),
-    fade_in: cueData.fade_in,     // <-- AGORA USAR 'fade_in'
-    delay_in: cueData.delay_in,   // <-- E AQUI 'delay_in'
-    values: cueData.values || [],
-    midi_actions: cueData.midi_actions || []
-  };
-
-  cuelist.cues.push(newCue);
-  console.log(`Cue '${newCue.name}' (${newCue.id}) adicionado à cuelist '${cuelist.name}'.`);
-  saveCuelists();
-  return newCue;
+  const newCue = {
+    id: generateUniqueId('cue'),
+    name: cueData.name,
+    fade_in: cueData.fade_in,
+    delay_in: cueData.delay_in,
+    values: cueData.values
+  };
+  cuelist.cues.push(newCue);
+  saveCuelists(); // Salva após a adição do cue
+  console.log(`Cuelist Module: Cue '${newCue.name}' adicionado à cuelist '${cuelist.name}'.`);
+  return cuelist;
 };
 
+/**
+ * Atualiza as propriedades de um cue específico dentro de uma cuelist.
+ * @param {string} cuelistId - ID da cuelist.
+ * @param {string} cueId - ID do cue a atualizar.
+ * @param {object} updates - Objeto com as propriedades a atualizar.
+ * @returns {object} O cue atualizado.
+ */
 const updateCueInCuelist = (cuelistId, cueId, updates) => {
-  const cuelist = getCuelistById(cuelistId);
-  if (!cuelist) {
-    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para atualizar cue.`);
-  }
+  const cuelist = getCuelistById(cuelistId);
+  if (!cuelist) {
+    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para atualizar cue.`);
+  }
+  const cueIndex = cuelist.cues.findIndex(cue => cue.id === cueId);
+  if (cueIndex === -1) {
+    throw new Error(`Cue com ID ${cueId} não encontrado na cuelist ${cuelistId}.`);
+  }
 
-  const cueIndex = cuelist.cues.findIndex(c => c.id === cueId);
-  if (cueIndex === -1) {
-    throw new Error(`Cue com ID ${cueId} não encontrado na cuelist ${cuelistId}.`);
-  }
+  // Validações para updates de fade_in e delay_in
+  if (updates.fade_in !== undefined && (typeof updates.fade_in !== 'number' || updates.fade_in < 0 || updates.fade_in > 999.9)) {
+    throw new Error('Fade time atualizado do cue deve ser um número entre 0 e 999.9.');
+  }
+  if (updates.delay_in !== undefined && (typeof updates.delay_in !== 'number' || updates.delay_in < 0 || updates.delay_in > 999.9)) {
+    throw new Error('Delay time atualizado do cue deve ser um número entre 0 e 999.9.');
+  }
+  if (updates.values !== undefined && !Array.isArray(updates.values)) {
+    throw new Error('Valores atualizados do cue devem ser um array.');
+  }
 
-  if (updates.name !== undefined) {
-      if (typeof updates.name !== 'string' || updates.name.trim() === '') {
-          throw new Error('Nome do cue inválido na atualização.');
-      }
-      updates.name = updates.name.trim();
-  }
-  // VALIDAÇÕES AGORA PARA 'fade_in' E 'delay_in' DE ACORDO COM O PROTOCOLO
-  if (updates.fade_in !== undefined) {
-      if (typeof updates.fade_in !== 'number' || updates.fade_in < 0 || updates.fade_in > 999.9) {
-          throw new Error('Fade in time do cue inválido na atualização. Deve ser um número entre 0 e 999.9.');
-      }
-  }
-  if (updates.delay_in !== undefined) {
-      if (typeof updates.delay_in !== 'number' || updates.delay_in < 0 || updates.delay_in > 999.9) {
-          throw new Error('Delay time do cue inválido na atualização. Deve ser um número entre 0 e 999.9.');
-      }
-  }
-  if (updates.values !== undefined) {
-      if (!Array.isArray(updates.values)) {
-          throw new Error('Os valores do cue atualizados devem ser um array.');
-      }
-      updates.values.forEach(v => {
-          if (!v.fixtureId || typeof v.fixtureId !== 'string' || !v.fixtureId.trim()) {
-              throw new Error(`Valor de cue atualizado inválido: fixtureId é obrigatório. (${JSON.stringify(v)})`);
-          }
-          if (!v.attribute || typeof v.attribute !== 'string' || !v.attribute.trim()) {
-              throw new Error(`Valor de cue atualizado inválido: atributo é obrigatório. (${JSON.stringify(v)})`);
-          }
-          if (typeof v.value !== 'number' || v.value < 0 || v.value > 255) {
-              throw new Error(`Valor DMX atualizado inválido para o atributo ${v.attribute} do fixture ${v.fixtureId}. Deve ser entre 0 e 255.`);
-          }
-      });
-  }
-
-  cuelist.cues[cueIndex] = { ...cuelist.cues[cueIndex], ...updates };
-  console.log(`Cue '${cueId}' atualizado na cuelist '${cuelistId}'.`);
-  saveCuelists();
-  return cuelist.cues[cueIndex];
+  cuelist.cues[cueIndex] = { ...cuelist.cues[cueIndex], ...updates };
+  saveCuelists(); // Salva após a atualização do cue
+  console.log(`Cuelist Module: Cue '${cueId}' na cuelist '${cuelistId}' atualizado.`);
+  return cuelist.cues[cueIndex];
 };
 
+/**
+ * Remove um cue específico de uma cuelist.
+ * @param {string} cuelistId - ID da cuelist.
+ * @param {string} cueId - ID do cue a remover.
+ * @returns {boolean} True se o cue foi removido, false caso contrário.
+ */
 const deleteCueFromCuelist = (cuelistId, cueId) => {
-  const cuelist = getCuelistById(cuelistId);
-  if (!cuelist) {
-    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para remover cue.`);
-  }
-
-  const initialLength = cuelist.cues.length;
-  cuelist.cues = cuelist.cues.filter(c => c.id !== cueId);
-  if (cuelist.cues.length < initialLength) {
-    console.log(`Cue '${cueId}' removido da cuelist '${cuelistId}'.`);
-    saveCuelists();
-    return true;
-  }
-  return false;
+  const cuelist = getCuelistById(cuelistId);
+  if (!cuelist) {
+    throw new Error(`Cuelist com ID ${cuelistId} não encontrada para remover cue.`);
+  }
+  const initialLength = cuelist.cues.length;
+  cuelist.cues = cuelist.cues.filter(cue => cue.id !== cueId);
+  if (cuelist.cues.length < initialLength) {
+    saveCuelists(); // Salva após a remoção do cue
+    console.log(`Cuelist Module: Cue '${cueId}' removido da cuelist '${cuelistId}'.`);
+    return true;
+  }
+  console.warn(`Cuelist Module: Tentativa de remover cue '${cueId}' da cuelist '${cuelistId}', mas não foi encontrado.`);
+  return false;
 };
 
+// --- Exportações do Módulo ---
 module.exports = {
-  getAllCuelists,
-  getCuelistById,
-  createCuelist,
-  updateCuelist,
-  deleteCuelist,
-  addCueToCuelist,
-  updateCueInCuelist,
-  deleteCueFromCuelist,
+  createCuelist,
+  getCuelistById,
+  getAllCuelists,
+  updateCuelist,
+  deleteCuelist,
+  addCueToCuelist,
+  updateCueInCuelist,
+  deleteCueFromCuelist,
+  loadCuelists,
+  saveCuelists
 };

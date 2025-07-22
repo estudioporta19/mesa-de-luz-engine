@@ -1,0 +1,76 @@
+[
+  {
+    "id": "clist_1752857807828_4hfgqorl4",
+    "name": "Cue List 1",
+    "cues": [
+      {
+        "id": "cue_1752858191515_16nq9is7k",
+        "name": "1",
+        "fade_in": 3,
+        "delay_in": 0,
+        "values": [
+          {
+            "fixtureId": "afc907c8-b8d7-4f26-9ee1-a0a78393feb3",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "7323fb2d-0d0c-474a-896a-1f99d6330d9a",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "37e75372-b1b1-441f-a72b-2c7317fafcb0",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "0e0e32d6-e0fe-4ed8-a354-26675582a476",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "a7e114ae-c012-4d84-b6e6-1a1c0e37e972",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "eb5e0ca2-91d7-4b20-a230-295f84aefe7c",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "0739e231-d63d-44a4-aec1-b6b990260e6f",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "0739e231-d63d-44a4-aec1-b6b990260e6f",
+            "attribute": "uv",
+            "value": 0
+          },
+          {
+            "fixtureId": "0739e231-d63d-44a4-aec1-b6b990260e6f",
+            "attribute": "zoom",
+            "value": 0
+          },
+          {
+            "fixtureId": "a7e1843c-d35c-43d8-a63a-adf934a4fb2d",
+            "attribute": "dimmer",
+            "value": 114
+          },
+          {
+            "fixtureId": "a7e1843c-d35c-43d8-a63a-adf934a4fb2d",
+            "attribute": "uv",
+            "value": 0
+          },
+          {
+            "fixtureId": "a7e1843c-d35c-43d8-a63a-adf934a4fb2d",
+            "attribute": "zoom",
+            "value": 0
+          }
+        ]
+      }
+    ]
+  }
+]
